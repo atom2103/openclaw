@@ -285,7 +285,9 @@ export class CodexNativeSubagentCloseOwner {
     // detachment lets it settle; explicit retirement still invalidates this call.
     call.completing = true;
     try {
-      const forgetters = await Promise.all(call.targets.map((target) => target.forget));
+      const forgetters = await Promise.all(
+        call.targets.map((target) => Promise.resolve(target.forget)),
+      );
       if (!isCurrent()) {
         return;
       }

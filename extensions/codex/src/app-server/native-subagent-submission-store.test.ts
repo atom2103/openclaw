@@ -176,7 +176,7 @@ describe("native subagent submission receipts in the binding store", () => {
   it.each(["record-native-subagent-submission", "consume-native-subagent-submission"] as const)(
     "rechecks current authority inside the atomic %s update",
     async (kind) => {
-      const { state, store, owner } = await fixture(receipt);
+      const { state, owner } = await fixture(receipt);
       const before = state.lookup(bindingStoreKey(identity));
       let current = true;
       const guarded = createCodexAppServerBindingStore({

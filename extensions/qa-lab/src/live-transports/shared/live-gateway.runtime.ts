@@ -70,6 +70,11 @@ type QaLiveGatewayParams = {
   controlUiEnabled?: boolean;
   mockAuthAgentIds?: readonly string[];
   mutateConfig?: (cfg: OpenClawConfig) => OpenClawConfig;
+  runtimeEnvPatch?: NodeJS.ProcessEnv;
+  mockProviderOptions?: {
+    repeatedRequestResponsePauseMs?: number;
+    repeatedRequestStalledResponsePauseMs?: number;
+  };
 };
 
 type QaLiveGateway = {
@@ -127,6 +132,7 @@ export function createQaLiveLaneGateway() {
       startup = (async () => {
         mock = await startQaProviderServer(params.providerMode, {
           modelRefs: [params.primaryModel, params.alternateModel],
+          ...params.mockProviderOptions,
         });
         if (closed) {
           throw new Error("qa live gateway lifecycle is closed");
@@ -147,6 +153,7 @@ export function createQaLiveLaneGateway() {
           claudeCliAuthMode: params.claudeCliAuthMode,
           controlUiEnabled: params.controlUiEnabled,
           mockAuthAgentIds: params.mockAuthAgentIds,
+          ...(params.runtimeEnvPatch ? { runtimeEnvPatch: params.runtimeEnvPatch } : {}),
           mutateConfig: (cfg) =>
             prepareLiveTransportGatewayConfig(params.mutateConfig ? params.mutateConfig(cfg) : cfg),
         });

@@ -3,7 +3,13 @@ import { getQaProvider, type QaMockProviderServer, type QaProviderModeInput } fr
 
 export async function startQaProviderServer(
   input: QaProviderModeInput,
-  params?: { host?: string; port?: number; modelRefs?: readonly string[] },
+  params?: {
+    host?: string;
+    port?: number;
+    modelRefs?: readonly string[];
+    repeatedRequestResponsePauseMs?: number;
+    repeatedRequestStalledResponsePauseMs?: number;
+  },
 ): Promise<QaMockProviderServer | null> {
   const provider = getQaProvider(input);
   switch (provider.mode) {

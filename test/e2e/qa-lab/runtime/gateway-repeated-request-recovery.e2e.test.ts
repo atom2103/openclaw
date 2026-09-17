@@ -324,7 +324,7 @@ describe("Gateway repeated-request provider timeout", () => {
           repeatedRequestStalledResponsePauseMs: STALLED_RESPONSE_PAUSE_MS,
         },
         runtimeEnvPatch: {
-          OPENCLAW_QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: String(QA_RECOVERY_BOUND_MS),
+          QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: String(QA_RECOVERY_BOUND_MS),
         },
         mutateConfig: (config) => {
           const models = config.models;
@@ -349,7 +349,7 @@ describe("Gateway repeated-request provider timeout", () => {
         },
       });
       const { gateway } = harness;
-      expect(gateway.runtimeEnv.OPENCLAW_QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS).toBe(
+      expect(gateway.runtimeEnv.QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS).toBe(
         String(QA_RECOVERY_BOUND_MS),
       );
       expect(gateway.runtimeEnv.OPENCLAW_QA_PARENT_PID).toBeTruthy();

@@ -6,21 +6,21 @@ describe("resolveQaDiagnosticHeartbeatTimings", () => {
     expect(
       resolveQaDiagnosticHeartbeatTimings({
         OPENCLAW_QA_PARENT_PID: "123",
-        OPENCLAW_QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "30000",
+        QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "30000",
       }),
     ).toEqual({ stuckSessionWarnMs: 15_000, stuckSessionAbortMs: 30_000 });
   });
 
   it.each([
     {},
-    { OPENCLAW_QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "30000" },
+    { QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "30000" },
     {
       OPENCLAW_QA_PARENT_PID: "123",
-      OPENCLAW_QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "29999",
+      QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "29999",
     },
     {
       OPENCLAW_QA_PARENT_PID: "123",
-      OPENCLAW_QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "not-a-number",
+      QA_DIAGNOSTIC_STUCK_SESSION_ABORT_MS: "not-a-number",
     },
   ])("rejects non-QA or unsafe overrides: %j", (env) => {
     expect(resolveQaDiagnosticHeartbeatTimings(env)).toBeUndefined();

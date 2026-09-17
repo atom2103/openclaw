@@ -285,9 +285,7 @@ export class CodexNativeSubagentCloseOwner {
     // detachment lets it settle; explicit retirement still invalidates this call.
     call.completing = true;
     try {
-      const forgetters = await Promise.all(
-        call.targets.map((target) => Promise.resolve(target.forget)),
-      );
+      const forgetters = await Promise.all(call.targets.map((target) => target.forget));
       if (!isCurrent()) {
         return;
       }
@@ -315,7 +313,7 @@ export class CodexNativeSubagentCloseOwner {
         // stop a resumed runtime whose start notification has not arrived yet.
         const forget = forgetters[index];
         if (childState) {
-          this.retireChild(state, childState, "Subagent was closed.", () => forget?.());
+          this.retireChild(state, childState, "Subagent was closed.", forget);
         } else {
           forget?.();
         }

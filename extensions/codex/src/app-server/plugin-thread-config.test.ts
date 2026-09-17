@@ -302,7 +302,12 @@ describe("Codex plugin thread config", () => {
       },
     });
 
-    expect(methods).toStrictEqual(["plugin/installed", "plugin/read", "config/read"]);
+    expect(methods).toStrictEqual([
+      "plugin/installed",
+      "plugin/read",
+      "config/read",
+      "mcpServerStatus/list",
+    ]);
     expect(config.configPatch?.apps).toEqual({
       _default: {
         enabled: false,

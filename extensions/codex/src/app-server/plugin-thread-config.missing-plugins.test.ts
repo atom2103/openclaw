@@ -15,6 +15,7 @@ import {
   pluginList,
   pluginSummary,
 } from "./plugin-thread-config.test-helpers.js";
+import type { CodexAppServerRequestParams } from "./protocol.js";
 
 describe("missing Codex plugin permissions", () => {
   beforeEach(() => defaultCodexAppInventoryCache.clear());
@@ -55,33 +56,37 @@ describe("missing Codex plugin permissions", () => {
     }) => {
       const errorLog = vi.spyOn(embeddedAgentLog, "error").mockImplementation(() => {});
       try {
-        const request = vi.fn(async (method: string) => {
+        const request = vi.fn(async (method: string, params?: unknown) => {
           if (method === "app/installed" || method === "app/read") {
-            return codexAppInventoryResponse(method, [
-              appInfo("configured-app", true),
-              {
-                ...appInfo("account-calendar-app", true),
-                pluginDisplayNames,
-                toolSummaries: [
-                  {
-                    name: "read",
-                    title: "Read",
-                    description: "Read fixture",
-                    isEnabled: true,
-                    disabledReason: null,
-                    isReadOnly: true,
-                  },
-                  {
-                    name: "write",
-                    title: "Write",
-                    description: "Write fixture",
-                    isEnabled: true,
-                    disabledReason: null,
-                    isReadOnly: false,
-                  },
-                ],
-              },
-            ]);
+            return codexAppInventoryResponse(
+              method,
+              [
+                appInfo("configured-app", true),
+                {
+                  ...appInfo("account-calendar-app", true),
+                  pluginDisplayNames,
+                  toolSummaries: [
+                    {
+                      name: "read",
+                      title: "Read",
+                      description: "Read fixture",
+                      isEnabled: true,
+                      disabledReason: null,
+                      isReadOnly: true,
+                    },
+                    {
+                      name: "write",
+                      title: "Write",
+                      description: "Write fixture",
+                      isEnabled: true,
+                      disabledReason: null,
+                      isReadOnly: false,
+                    },
+                  ],
+                },
+              ],
+              params as CodexAppServerRequestParams<"app/read">,
+            );
           }
           if (method === "plugin/installed" || method === "plugin/list") {
             const summaries = [pluginSummary("healthy-plugin", { installed: true, enabled: true })];

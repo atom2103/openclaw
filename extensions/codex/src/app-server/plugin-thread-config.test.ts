@@ -311,6 +311,8 @@ describe("Codex plugin thread config", () => {
       "workspace-data-app": {
         enabled: true,
         destructive_enabled: false,
+        default_tools_enabled: false,
+        tools: {},
         open_world_enabled: true,
         default_tools_approval_mode: "auto",
       },
@@ -545,6 +547,8 @@ describe("Codex plugin thread config", () => {
     expect(disabledApps?.["google-calendar-app"]).toEqual({
       enabled: true,
       destructive_enabled: false,
+      default_tools_enabled: false,
+      tools: {},
       open_world_enabled: true,
       default_tools_approval_mode: "auto",
     });
@@ -1114,18 +1118,24 @@ describe("Codex plugin thread config", () => {
         "chatgpt-meetings": {
           enabled: true,
           destructive_enabled: false,
+          default_tools_enabled: false,
+          tools: {},
           open_world_enabled: true,
           default_tools_approval_mode: "auto",
         },
         "disabled-account-app": {
           enabled: true,
           destructive_enabled: false,
+          default_tools_enabled: false,
+          tools: {},
           open_world_enabled: true,
           default_tools_approval_mode: "auto",
         },
         slack: {
           enabled: true,
           destructive_enabled: false,
+          default_tools_enabled: false,
+          tools: {},
           open_world_enabled: true,
           default_tools_approval_mode: "auto",
         },
@@ -3025,7 +3035,7 @@ describe("Codex plugin thread config", () => {
     expect(third).not.toBe(second);
   });
 
-  it("uses app-level destructive policy for plugins without OpenClaw tool-name knowledge", async () => {
+  it("disables tools when destructive access is denied and native tool metadata is absent", async () => {
     const appCache = new CodexAppInventoryCache();
     await appCache.refreshNow({
       key: "runtime",
@@ -3068,6 +3078,8 @@ describe("Codex plugin thread config", () => {
     expect(apps?.["github-app"]).toEqual({
       enabled: true,
       destructive_enabled: false,
+      default_tools_enabled: false,
+      tools: {},
       open_world_enabled: true,
       default_tools_approval_mode: "auto",
     });

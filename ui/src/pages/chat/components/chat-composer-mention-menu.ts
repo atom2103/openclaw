@@ -10,7 +10,7 @@ import { icons } from "../../../components/icons.ts";
 import { t } from "../../../i18n/index.ts";
 import type { HumanMention } from "../../../lib/chat/chat-types.ts";
 import { MAX_HUMAN_MENTIONS, updateHumanMentions } from "../../../lib/chat/human-mentions.ts";
-import "../../../styles/chat/reply-preview.css";
+import "../../../styles/chat/composer-context-strip.css";
 import "../../../styles/chat/mention-menu.css";
 import { renderChatAuthorAvatar } from "./chat-author-avatar.ts";
 import { paneDomId } from "./chat-composer-dom.ts";
@@ -351,12 +351,16 @@ export function renderSelectedHumanMentions(
     return nothing;
   }
   const names = mentions.map((mention) => text.slice(mention.start, mention.end)).join(", ");
-  return html`<div class="chat-reply-preview" role="status">
-    <span class="chat-reply-preview__icon" aria-hidden="true">${icons.users}</span>
-    <span class="chat-reply-preview__text">${t("chat.mentions.selected", { names })}</span>
+  return html`<div class="chat-reply-preview composer-context-strip" role="status">
+    <span class="chat-reply-preview__icon composer-context-strip__icon" aria-hidden="true"
+      >${icons.users}</span
+    >
+    <span class="chat-reply-preview__text composer-context-strip__text"
+      >${t("chat.mentions.selected", { names })}</span
+    >
     <button
       type="button"
-      class="chat-reply-preview__dismiss"
+      class="chat-reply-preview__dismiss composer-context-strip__dismiss"
       aria-label=${t("chat.mentions.remove")}
       @click=${onRemove}
     >

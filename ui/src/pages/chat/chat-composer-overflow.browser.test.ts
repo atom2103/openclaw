@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import type { SessionGoal } from "../../api/types.ts";
 import { renderComposerMenu } from "../../components/composer-menu.ts";
+import { createComposerProps } from "./chat-composer.test-support.ts";
 import { renderAttachmentPreview } from "./components/chat-attachments.ts";
 import { renderChatGoal } from "./components/chat-composer-goal.ts";
 import { getChatComposerState, resetChatComposerState } from "./components/chat-composer-state.ts";
+import { renderChatComposer } from "./components/chat-composer.ts";
 import baseStyles from "../../styles/base.css?inline";
 import goalStyles from "../../styles/chat/composer-progress.css?inline";
 import composerSurfaceStyles from "../../styles/chat/composer-surface.css?inline";
@@ -50,6 +52,61 @@ describe("composer overflow presentation", () => {
   function rail() {
     return container.querySelector<HTMLElement>(".chat-attachments-preview")!;
   }
+
+  it.each([390, 1440])(
+    "keeps long reply context and its dismiss control inside the composer at %ipx",
+    async (width) => {
+      await page.viewport(width, 900);
+      container.className = "";
+      container.style.width = `${Math.min(width - 32, 760)}px`;
+      render(
+        renderChatComposer(
+          createComposerProps({
+            goalDraftMode: { action: "start" },
+            replyTarget: {
+              messageId: "context-strip-reply",
+              senderLabel: "A very long sender name ".repeat(12),
+              text: "A long message excerpt that must leave room for cancellation. ".repeat(8),
+            },
+          }),
+        ),
+        container,
+      );
+      await afterLayout();
+
+      const composer = container.querySelector<HTMLElement>(".agent-chat__input")!;
+      const reply = container.querySelector<HTMLElement>(".chat-reply-preview")!;
+      const goal = container.querySelector<HTMLElement>(".agent-chat__goal-mode")!;
+      const text = reply.querySelector<HTMLElement>(".chat-reply-preview__text")!;
+      const dismiss = reply.querySelector<HTMLButtonElement>("button")!;
+      const composerBox = composer.getBoundingClientRect();
+      const replyBox = reply.getBoundingClientRect();
+      const dismissBox = dismiss.getBoundingClientRect();
+
+      expect(dismissBox.width).toBeGreaterThan(0);
+      expect(dismissBox.left).toBeGreaterThanOrEqual(replyBox.left);
+      expect(dismissBox.right).toBeLessThanOrEqual(replyBox.right);
+      expect(replyBox.left).toBeGreaterThanOrEqual(composerBox.left);
+      expect(replyBox.right).toBeLessThanOrEqual(composerBox.right);
+      expect(composer.scrollWidth).toBeLessThanOrEqual(composer.clientWidth + 1);
+      expect(text.getBoundingClientRect().width).toBeGreaterThan(0);
+      expect(text.scrollWidth).toBeGreaterThan(text.clientWidth);
+      expect(text.scrollHeight).toBeLessThanOrEqual(text.clientHeight + 1);
+
+      const surface = (element: HTMLElement) => {
+        const style = getComputedStyle(element);
+        return {
+          background: style.backgroundColor,
+          border: style.border,
+          borderRadius: style.borderRadius,
+          padding: style.padding,
+          margin: style.margin,
+        };
+      };
+      expect(surface(reply)).toEqual(surface(goal));
+      expect(replyBox.height).toBeCloseTo(goal.getBoundingClientRect().height, 0);
+    },
+  );
 
   async function expectEdges(
     element: HTMLElement,

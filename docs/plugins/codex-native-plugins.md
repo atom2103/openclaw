@@ -494,6 +494,13 @@ which accepts `true`, `false`, `"auto"`, or `"ask"`. Explicit per-plugin policy
 overrides the global policy for overlapping app ids. Inventory failures fail
 closed instead of falling back to an unrestricted default.
 
+A missing enabled plugin or marketplace is logged as an error without disabling
+healthy configured apps. If the missing entry has a `false` or `"ask"` action
+policy, account apps whose ownership cannot be established inherit the strictest
+of that restriction and the global policy. This preserves read access while
+preventing missing ownership from granting broader action permissions. Apps
+with proven configured ownership retain their explicit plugin policy.
+
 ## Thread app config
 
 OpenClaw injects a restrictive `config.apps` patch for the Codex thread:

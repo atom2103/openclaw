@@ -1586,27 +1586,46 @@ describe("Codex plugin thread config", () => {
     },
   );
 
-  it.each([
-    {
-      name: "an enabled plugin is missing",
-      marketplaceName: CODEX_PLUGINS_MARKETPLACE_NAME,
-      diagnosticCode: "plugin_missing",
-    },
-    {
-      name: "an enabled plugin's marketplace is missing",
-      marketplaceName: "missing-marketplace",
-      diagnosticCode: "marketplace_missing",
-    },
-  ])(
-    "logs an error and admits healthy apps when $name",
-    async ({ marketplaceName, diagnosticCode }) => {
+  it.each(
+    [
+      {
+        name: "an enabled plugin is missing",
+        marketplaceName: CODEX_PLUGINS_MARKETPLACE_NAME,
+        diagnosticCode: "plugin_missing",
+      },
+      {
+        name: "an enabled plugin's marketplace is missing",
+        marketplaceName: "missing-marketplace",
+        diagnosticCode: "marketplace_missing",
+      },
+    ].flatMap((scenario) =>
+      ["auto", false, "ask"].flatMap((restriction) =>
+        [[], ["unrelated-display-name"]].map((pluginDisplayNames) => ({
+          ...scenario,
+          restriction,
+          pluginDisplayNames,
+          destructiveEnabled: restriction !== false,
+          approvalMode: restriction === false ? "deny" : restriction,
+        })),
+      ),
+    ),
+  )(
+    "preserves $restriction policy with owner names $pluginDisplayNames when $name",
+    async ({
+      marketplaceName,
+      diagnosticCode,
+      restriction,
+      pluginDisplayNames,
+      destructiveEnabled,
+      approvalMode,
+    }) => {
       const errorLog = vi.spyOn(embeddedAgentLog, "error").mockImplementation(() => {});
       try {
         const request = vi.fn(async (method: string) => {
           if (method === "app/installed" || method === "app/read") {
             return codexAppInventoryResponse(method, [
               appInfo("configured-app", true),
-              appInfo("account-calendar-app", true),
+              { ...appInfo("account-calendar-app", true), pluginDisplayNames },
             ]);
           }
           if (method === "plugin/installed" || method === "plugin/list") {
@@ -1633,11 +1652,12 @@ describe("Codex plugin thread config", () => {
                 healthy: {
                   marketplaceName: CODEX_PLUGINS_MARKETPLACE_NAME,
                   pluginName: "healthy-plugin",
-                  allow_destructive_actions: false,
+                  allow_destructive_actions: "auto",
                 },
                 missing: {
                   marketplaceName,
                   pluginName: "missing-plugin",
+                  allow_destructive_actions: restriction,
                 },
               },
             },
@@ -1647,12 +1667,24 @@ describe("Codex plugin thread config", () => {
         });
 
         expect(config.configPatch?.apps).toMatchObject({
-          "configured-app": { enabled: true, destructive_enabled: false },
-          "account-calendar-app": { enabled: true, destructive_enabled: true },
+          "configured-app": { enabled: true, destructive_enabled: true },
+          "account-calendar-app": {
+            enabled: true,
+            destructive_enabled: destructiveEnabled,
+            ...(restriction === "ask" ? { approvals_reviewer: "user" } : {}),
+          },
         });
         expect(config.policyContext.apps).toMatchObject({
-          "configured-app": { configKey: "healthy", allowDestructiveActions: false },
-          "account-calendar-app": { source: "account", allowDestructiveActions: true },
+          "configured-app": {
+            configKey: "healthy",
+            allowDestructiveActions: true,
+            destructiveApprovalMode: "auto",
+          },
+          "account-calendar-app": {
+            source: "account",
+            allowDestructiveActions: destructiveEnabled,
+            destructiveApprovalMode: approvalMode,
+          },
         });
         expect(config.diagnostics).toEqual([
           expect.objectContaining({

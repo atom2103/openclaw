@@ -113,7 +113,7 @@ type BuildCodexPluginThreadConfigParams = {
 
 // Admission changes must rebuild existing bindings too, or older bindings can
 // bypass updated app approval checks after the gateway has been upgraded.
-const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 7;
+const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 8;
 const CODEX_PLUGIN_THREAD_CONFIG_FINGERPRINT_VERSION = 2;
 
 /** Returns true when plugin config exists and thread config may need app patches. */
@@ -410,6 +410,25 @@ export async function buildCodexPluginThreadConfig(
     }
   }
 
+  const accountPolicy = { ...policy };
+  for (const diagnostic of inventory.diagnostics) {
+    const missing = diagnostic.plugin;
+    if (
+      !missing?.enabled ||
+      (diagnostic.code !== "plugin_missing" && diagnostic.code !== "marketplace_missing")
+    ) {
+      continue;
+    }
+    // Unknown ownership cannot turn a plugin restriction into broader account
+    // authority. Keep reads available and retain the strictest action policy;
+    // proven configured apps already received their own policy above.
+    if (!missing.allowDestructiveActions) {
+      accountPolicy.allowDestructiveActions = false;
+      accountPolicy.destructiveApprovalMode = "deny";
+    } else if (missing.destructiveApprovalMode === "ask" && accountPolicy.allowDestructiveActions) {
+      accountPolicy.destructiveApprovalMode = "ask";
+    }
+  }
   for (const app of unresolvedDisabledPluginOwnership ? [] : accountAppsResult.apps) {
     // An explicit plugin policy is more specific than the account-wide policy.
     // Reserve proven ownership even when activation/readiness fails so a broad
@@ -425,17 +444,17 @@ export async function buildCodexPluginThreadConfig(
     // Global callability does not prove this thread's workspace/managed policy.
     provisionalAppIds.add(app.id);
     apps[app.id] = buildEnabledAppConfig(
-      policy,
-      policy.destructiveApprovalMode === "ask"
+      accountPolicy,
+      accountPolicy.destructiveApprovalMode === "ask"
         ? buildCodexAppApprovalOverrides(admissionConfig.config, accountApp)
         : undefined,
     );
     policyApps[app.id] = {
       source: "account",
       appName: app.name,
-      allowDestructiveActions: policy.allowDestructiveActions,
+      allowDestructiveActions: accountPolicy.allowDestructiveActions,
       allowOpenWorld: true,
-      destructiveApprovalMode: policy.destructiveApprovalMode,
+      destructiveApprovalMode: accountPolicy.destructiveApprovalMode,
       mcpServerNames: [],
     };
   }

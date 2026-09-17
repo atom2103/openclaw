@@ -160,8 +160,12 @@ it.each(["inventory", "snapshot"] as const)(
       const before = Number(await fs.readFile(progress, "utf8"));
       const result = await runWorker({ mode, ...admission });
       expect(result.code, result.stderr.toString()).toBe(0);
+      const observedAfter = Number(await fs.readFile(progress, "utf8"));
+      expect(observedAfter).toBeGreaterThan(before);
+      // A committed generation can precede its watermark; join the writer before bounding copies.
+      await fs.writeFile(stop, "stop");
+      await writing;
       const after = Number(await fs.readFile(progress, "utf8"));
-      expect(after).toBeGreaterThan(before);
       if (mode === "inventory") {
         const inventory = UpdateCandidateSnapshotInventorySchema.parse(
           JSON.parse(result.stdout.toString()),

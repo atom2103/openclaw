@@ -11,7 +11,10 @@ import {
 import { isArtifactPreservingStateRead } from "../../state/openclaw-state-db-readonly.js";
 import type { OpenClawStateWorkerContext } from "../../state/openclaw-state-worker-context.types.js";
 import { runOpenClawStateWorkerOperation } from "../../state/openclaw-state-worker-store.js";
+import { mergePersistedAuthProfileState } from "./persisted.js";
 import type { PersistedAuthProfileStoreInspection } from "./sqlite.js";
+import { AuthProfileStoreUnreadableError } from "./store-unreadable-error.js";
+import type { AuthProfileStore } from "./types.js";
 
 export type AuthProfileRowRead = {
   store: PersistedAuthProfileStoreInspection;
@@ -21,6 +24,21 @@ export type AuthProfileRowRead = {
 export type AuthProfileReadWorkerOperations = {
   read: { input: undefined; output: AuthProfileRowRead };
 };
+
+/** Decode worker-read facts with the same store/state coercion as synchronous reads. */
+export function loadPersistedAuthProfileStoreFromRows(
+  rows: AuthProfileRowRead,
+  databasePath: string,
+): AuthProfileStore | null {
+  const store = mergePersistedAuthProfileState(
+    rows.store.status === "readable" ? rows.store.raw : null,
+    () => (rows.state.status === "readable" ? rows.state.raw : null),
+  );
+  if (!store && rows.store.status !== "missing") {
+    throw new AuthProfileStoreUnreadableError(databasePath);
+  }
+  return store;
+}
 
 const missing: AuthProfileRowRead = {
   store: { status: "missing", reason: "database" },

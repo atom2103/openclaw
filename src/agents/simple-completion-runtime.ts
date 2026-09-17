@@ -341,7 +341,6 @@ async function prepareSimpleCompletionModelCore(
             ...(params.agentId ? { agentId: params.agentId } : {}),
             skipAgentDiscovery: true,
             allowBundledStaticCatalogFallback: true,
-            preferBundledStaticCatalogTransport: true,
             authProfileId,
             authProfileMode,
           }),

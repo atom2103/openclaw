@@ -1,5 +1,5 @@
-import "./side-question.test-support.js";
 import { Server } from "node:http";
+import "./side-question.test-support.js";
 // Codex tests cover side question plugin behavior.
 import path from "node:path";
 import {
@@ -28,6 +28,10 @@ import { buildCodexAppServerConnectionFingerprint } from "./plugin-app-cache-key
 import type { JsonObject, JsonValue } from "./protocol.js";
 import { createSandboxContext } from "./sandbox-exec-server.test-helpers.js";
 import { createCodexTestBindingStore } from "./session-binding.test-helpers.js";
+import {
+  createSideQuestionNativeAppConfig,
+  createSideQuestionNativeToolInventory,
+} from "./side-question.plugin-policy.test-helpers.js";
 import {
   createClientHarness,
   createCodexTestModel,
@@ -1202,42 +1206,13 @@ describe("runCodexAppServerSideQuestion", () => {
     async (outcome) => {
       const approvalSpy = vi.spyOn(elicitationBridge, "routeCodexAppServerElicitationRequest");
       const rejectsReplay = outcome === "binding-changed" || outcome === "config-unavailable";
-      const nativeAppConfig = {
-        enabled: true,
-        links: {
-          account: { approvals_reviewer: "auto_review", default_tools_approval_mode: "approve" },
-        },
-        tools: {
-          write: { enabled: false, approval_mode: "approve" },
-          read: { approval_mode: "approve" },
-          retired: { approval_mode: "approve" },
-        },
-      };
+      const nativeAppConfig = createSideQuestionNativeAppConfig();
       const savedAppConfig = structuredClone(nativeAppConfig);
       const client = createFakeClient({ completeTurn: rejectsReplay });
       const baseRequest = client.request.getMockImplementation()!;
       client.request.mockImplementation(async (method: string, requestParams?: unknown) => {
         if (method === "mcpServerStatus/list") {
-          return {
-            data: [
-              {
-                name: "codex_apps",
-                tools: {
-                  write: {
-                    name: "write",
-                    annotations: { readOnlyHint: false },
-                    _meta: { connector_id: "ask-app" },
-                  },
-                  "false.read": {
-                    name: "false.read",
-                    annotations: { readOnlyHint: true },
-                    _meta: { connector_id: "false-app" },
-                  },
-                },
-              },
-            ],
-            nextCursor: null,
-          };
+          return createSideQuestionNativeToolInventory();
         }
         if (method === "app/installed") {
           return {

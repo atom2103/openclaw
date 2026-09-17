@@ -11,6 +11,7 @@ import {
   type ResolvedCodexPluginPolicy,
   type ResolvedCodexPluginsPolicy,
 } from "./config.js";
+import { resolveCodexAccountAppPolicy } from "./plugin-account-policy.js";
 import {
   ensureCodexPluginActivation,
   type CodexPluginActivationResult,
@@ -420,25 +421,7 @@ export async function buildCodexPluginThreadConfig(
     }
   }
 
-  const accountPolicy = { ...policy };
-  for (const diagnostic of inventory.diagnostics) {
-    const missing = diagnostic.plugin;
-    if (
-      !missing?.enabled ||
-      (diagnostic.code !== "plugin_missing" && diagnostic.code !== "marketplace_missing")
-    ) {
-      continue;
-    }
-    // Unknown ownership cannot turn a plugin restriction into broader account
-    // authority. Keep reads available and retain the strictest action policy;
-    // proven configured apps already received their own policy above.
-    if (!missing.allowDestructiveActions) {
-      accountPolicy.allowDestructiveActions = false;
-      accountPolicy.destructiveApprovalMode = "deny";
-    } else if (missing.destructiveApprovalMode === "ask" && accountPolicy.allowDestructiveActions) {
-      accountPolicy.destructiveApprovalMode = "ask";
-    }
-  }
+  const accountPolicy = resolveCodexAccountAppPolicy(policy, inventory.diagnostics);
   for (const app of unresolvedDisabledPluginOwnership ? [] : accountAppsResult.apps) {
     // An explicit plugin policy is more specific than the account-wide policy.
     // Reserve proven ownership even when activation/readiness fails so a broad

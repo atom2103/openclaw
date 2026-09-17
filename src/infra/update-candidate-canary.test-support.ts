@@ -1,8 +1,11 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
-import { vi } from "vitest";
+import { onTestFinished, vi } from "vitest";
+import { createUpdateProgress } from "../cli/update-cli/progress.js";
 import type { SpawnResult } from "../process/exec.js";
+import { defaultRuntime } from "../runtime.js";
+import type { UpdateStepResult } from "./update-runner-types.js";
 
 export class FakeChild extends EventEmitter {
   pid: number;
@@ -12,43 +15,6 @@ export class FakeChild extends EventEmitter {
     super();
     this.pid = pid;
   }
-}
-
-export function mockCanaryChildProcesses(
-  original: typeof import("node:child_process"),
-  spawn: typeof original.spawn,
-) {
-  return {
-    ...original,
-    spawn: new Proxy(original.spawn, {
-      apply(target, thisArg, args) {
-        const argv: unknown = args[1];
-        if (
-          Array.isArray(argv) &&
-          typeof argv[0] === "string" &&
-          /[/\\]dist[/\\](?:index|infra[/\\]update-migrated-finalize\.worker)\.js$/.test(argv[0])
-        ) {
-          return Reflect.apply(spawn, thisArg, args);
-        }
-        return Reflect.apply(target, thisArg, args);
-      },
-    }),
-  };
-}
-
-export function mockCanarySnapshotCommands(
-  original: typeof import("../process/exec.js"),
-  snapshot: typeof original.runUtf8CommandWithTimeout,
-) {
-  return {
-    ...original,
-    runUtf8CommandWithTimeout: (...args: Parameters<typeof original.runUtf8CommandWithTimeout>) => {
-      if (args[0].some((arg) => /[/\\]update-candidate-state\.worker\.[cm]?[jt]s$/.test(arg))) {
-        return snapshot(...args);
-      }
-      return original.runUtf8CommandWithTimeout(...args);
-    },
-  };
 }
 
 export function createCanarySnapshotResult(input: string, databasePath?: string): SpawnResult {
@@ -118,4 +84,17 @@ export function stubHealthyGateway() {
     "fetch",
     vi.fn(async () => Response.json({ status: "started", ready: true })),
   );
+}
+
+export function renderSteps(steps: UpdateStepResult[]) {
+  const log = vi.spyOn(defaultRuntime, "log").mockImplementation(() => {});
+  const presentation = createUpdateProgress(true);
+  onTestFinished(() => {
+    presentation.dispose();
+    log.mockRestore();
+  });
+  for (const [index, step] of steps.entries()) {
+    presentation.progress.onStepComplete?.({ ...step, index, total: steps.length });
+  }
+  return log.mock.calls.flat().join("\n");
 }

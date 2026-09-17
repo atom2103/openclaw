@@ -74,7 +74,8 @@ it.each(["inventory", "snapshot"] as const)(
             db.prepare("UPDATE witness SET generation = ?, inverse = ?").run(generation, -generation);
             db.exec("COMMIT");
           }
-          fs.writeFileSync(${JSON.stringify(progress)}, String(generation++));
+          fs.writeFileSync(${JSON.stringify(progress + ".tmp")}, String(generation++));
+          fs.renameSync(${JSON.stringify(progress + ".tmp")}, ${JSON.stringify(progress)});
           for (const file of files) {
             if (fs.statSync(file + "-wal").size > 16 * 1024 * 1024) {
               throw new Error("bounded writer WAL exceeded 16 MiB");

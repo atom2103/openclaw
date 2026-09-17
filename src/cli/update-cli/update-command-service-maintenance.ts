@@ -111,9 +111,11 @@ export async function revalidateManagedGatewayServiceAfterUpdate(params: {
   const inspection = await inspectManagedGatewayServiceBeforeUpdate({
     ...params,
     retainedCommand: verdict?.kind === "owned" || verdict?.kind === "unresolved",
+    allowInstallRootChange: params.allowInstallRootChange && !verdict,
   });
   if (
-    params.allowInstallRootChange &&
+    (params.allowInstallRootChange ||
+      (verdict?.kind === "owned" && verdict.requiresInstallRootRefresh)) &&
     before &&
     verdict?.kind === "owned" &&
     verdict.refreshDefinition &&
@@ -407,7 +409,7 @@ async function stopManagedServiceBeforeMutableUpdate(
     root: params.root,
     state: serviceState,
     preManagedServiceStop: params.expectedService,
-    allowInstallRootChange: params.allowInstallRootChange,
+    allowInstallRootChange: params.allowInstallRootChange ?? params.updateInstallKind === "package",
   });
   assertCurrent();
   if (params.phase) {

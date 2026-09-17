@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultCodexAppInventoryCache } from "./app-inventory-cache.js";
 import { codexAppInventoryResponse } from "./app-inventory.test-helpers.js";
 import { CODEX_PLUGINS_MARKETPLACE_NAME } from "./config.js";
-import { buildCodexPluginThreadConfig } from "./plugin-thread-config.js";
+import {
+  buildCodexPluginThreadConfig,
+  refreshCodexPluginAppApprovalPolicy,
+} from "./plugin-thread-config.js";
 import {
   appInfo,
   appSummary,
@@ -30,7 +33,9 @@ describe("missing Codex plugin permissions", () => {
     ].flatMap((scenario) =>
       ["auto", false, "ask"].flatMap((restriction) =>
         [[], ["unrelated-display-name"]].map((pluginDisplayNames) => ({
-          ...scenario,
+          name: scenario.name,
+          marketplaceName: scenario.marketplaceName,
+          diagnosticCode: scenario.diagnosticCode,
           restriction,
           pluginDisplayNames,
           destructiveEnabled: restriction !== false,
@@ -54,7 +59,28 @@ describe("missing Codex plugin permissions", () => {
           if (method === "app/installed" || method === "app/read") {
             return codexAppInventoryResponse(method, [
               appInfo("configured-app", true),
-              { ...appInfo("account-calendar-app", true), pluginDisplayNames },
+              {
+                ...appInfo("account-calendar-app", true),
+                pluginDisplayNames,
+                toolSummaries: [
+                  {
+                    name: "read",
+                    title: "Read",
+                    description: "Read fixture",
+                    isEnabled: true,
+                    disabledReason: null,
+                    isReadOnly: true,
+                  },
+                  {
+                    name: "write",
+                    title: "Write",
+                    description: "Write fixture",
+                    isEnabled: true,
+                    disabledReason: null,
+                    isReadOnly: false,
+                  },
+                ],
+              },
             ]);
           }
           if (method === "plugin/installed" || method === "plugin/list") {
@@ -67,7 +93,20 @@ describe("missing Codex plugin permissions", () => {
             return pluginDetail("healthy-plugin", [appSummary("configured-app")]);
           }
           if (method === "config/read") {
-            return { config: {}, layers: [] };
+            return {
+              config: {
+                apps: {
+                  "account-calendar-app": {
+                    default_tools_enabled: true,
+                    tools: {
+                      write: { enabled: true, approval_mode: "approve" },
+                      read: { enabled: true, approval_mode: "approve" },
+                    },
+                  },
+                },
+              },
+              layers: [],
+            };
           }
           throw new Error(`unexpected request ${method}`);
         });
@@ -115,6 +154,26 @@ describe("missing Codex plugin permissions", () => {
             destructiveApprovalMode: approvalMode,
           },
         });
+
+        if (restriction === false || restriction === "ask") {
+          const expectedTools =
+            restriction === false
+              ? { write: { enabled: false, approval_mode: "auto" }, Write: { enabled: false } }
+              : { write: { approval_mode: "auto" } };
+          expect(config.configPatch?.apps).toMatchObject({
+            "account-calendar-app": { tools: expectedTools },
+          });
+          const replay = await refreshCodexPluginAppApprovalPolicy({
+            policyContext: config.policyContext,
+            request,
+          });
+          expect(replay.configPatch.apps).toMatchObject({
+            "account-calendar-app": {
+              destructive_enabled: destructiveEnabled,
+              tools: expectedTools,
+            },
+          });
+        }
         expect(config.diagnostics).toEqual([
           expect.objectContaining({
             code: diagnosticCode,

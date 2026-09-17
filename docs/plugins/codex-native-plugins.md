@@ -501,6 +501,13 @@ of that restriction and the global policy. This preserves read access while
 preventing missing ownership from granting broader action permissions. Apps
 with proven configured ownership retain their explicit plugin policy.
 
+For `false`, the conversation overlay explicitly disables every currently
+identified non-read-only tool, so saved tool enablement cannot override the
+restriction. Read-tool settings and saved configuration are preserved. If tool
+metadata is unavailable, tools remain disabled until a safe read-only subset
+can be established. Restrictions are refreshed before a persisted app policy
+is replayed.
+
 ## Thread app config
 
 OpenClaw injects a restrictive `config.apps` patch for the Codex thread:

@@ -113,7 +113,7 @@ type BuildCodexPluginThreadConfigParams = {
 
 // Admission changes must rebuild existing bindings too, or older bindings can
 // bypass updated app approval checks after the gateway has been upgraded.
-const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 8;
+const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 9;
 const CODEX_PLUGIN_THREAD_CONFIG_FINGERPRINT_VERSION = 2;
 
 /** Returns true when plugin config exists and thread config may need app patches. */
@@ -394,8 +394,12 @@ export async function buildCodexPluginThreadConfig(
       provisionalAppIds.add(app.id);
       apps[app.id] = buildEnabledAppConfig(
         record.policy,
-        record.policy.destructiveApprovalMode === "ask"
-          ? buildCodexAppApprovalOverrides(admissionConfig.config, app)
+        !record.policy.allowDestructiveActions || record.policy.destructiveApprovalMode === "ask"
+          ? buildCodexAppApprovalOverrides(
+              admissionConfig.config,
+              app,
+              record.policy.allowDestructiveActions ? "ask" : "deny",
+            )
           : undefined,
       );
       policyApps[app.id] = {
@@ -445,8 +449,12 @@ export async function buildCodexPluginThreadConfig(
     provisionalAppIds.add(app.id);
     apps[app.id] = buildEnabledAppConfig(
       accountPolicy,
-      accountPolicy.destructiveApprovalMode === "ask"
-        ? buildCodexAppApprovalOverrides(admissionConfig.config, accountApp)
+      !accountPolicy.allowDestructiveActions || accountPolicy.destructiveApprovalMode === "ask"
+        ? buildCodexAppApprovalOverrides(
+            admissionConfig.config,
+            accountApp,
+            accountPolicy.allowDestructiveActions ? "ask" : "deny",
+          )
         : undefined,
     );
     policyApps[app.id] = {
@@ -601,7 +609,7 @@ export function buildCodexPluginAppsConfigPatchFromPolicyContext(
   return Object.keys(policyContext.apps).length > 0 ? { apps } : disabledConfigPatch;
 }
 
-/** Projects current ask overrides before a side thread replays its bound app policy. */
+/** Projects current action restrictions before a side thread replays its bound app policy. */
 export async function refreshCodexPluginAppApprovalPolicy(params: {
   policyContext: PluginAppPolicyContext;
   request: CodexPluginRuntimeRequest;
@@ -617,7 +625,7 @@ export async function refreshCodexPluginAppApprovalPolicy(params: {
     };
   }
   const targetApps = Object.entries(params.policyContext.apps)
-    .filter(([, app]) => app.destructiveApprovalMode === "ask")
+    .filter(([, app]) => !app.allowDestructiveActions || app.destructiveApprovalMode === "ask")
     .toSorted(([left], [right]) => left.localeCompare(right));
   const targetAppIds = targetApps.map(([id]) => id);
   const diagnostics: CodexPluginThreadConfigDiagnostic[] = [];
@@ -648,7 +656,11 @@ export async function refreshCodexPluginAppApprovalPolicy(params: {
     } else {
       configPatch.apps[id] = buildEnabledAppConfig(
         policy,
-        buildCodexAppApprovalOverrides(admissionConfig.config, app),
+        buildCodexAppApprovalOverrides(
+          admissionConfig.config,
+          app,
+          policy.allowDestructiveActions ? "ask" : "deny",
+        ),
       );
       continue;
     }

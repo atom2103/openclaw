@@ -94,3 +94,27 @@ export function appInfo(id: string, accessible: boolean, enabled = true): v2.App
     pluginDisplayNames: [],
   };
 }
+
+export function nativeAppTools(apps: v2.AppInfo[]) {
+  return {
+    data: [
+      {
+        name: "codex_apps",
+        tools: Object.fromEntries(
+          apps.flatMap((app) =>
+            (app.toolSummaries ?? []).map((tool) => [
+              `${app.id}:${tool.name}`,
+              {
+                name: tool.name,
+                title: tool.title,
+                annotations: { readOnlyHint: tool.isReadOnly },
+                _meta: { connector_id: app.id },
+              },
+            ]),
+          ),
+        ),
+      },
+    ],
+    nextCursor: null,
+  };
+}

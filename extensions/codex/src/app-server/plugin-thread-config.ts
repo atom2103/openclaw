@@ -24,6 +24,10 @@ import {
 } from "./plugin-inventory.js";
 import type { CodexPluginMetadataCache } from "./plugin-metadata-cache.js";
 import {
+  readCodexNativeAppToolKeys,
+  withCodexNativeAppToolKeys,
+} from "./plugin-native-tool-keys.js";
+import {
   collectCodexPluginOwnedAppIds,
   collectCodexReservedPluginAppIds,
   readCodexConfigForAppAdmission,
@@ -113,7 +117,7 @@ type BuildCodexPluginThreadConfigParams = {
 
 // Admission changes must rebuild existing bindings too, or older bindings can
 // bypass updated app approval checks after the gateway has been upgraded.
-const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 9;
+const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 10;
 const CODEX_PLUGIN_THREAD_CONFIG_FINGERPRINT_VERSION = 2;
 
 /** Returns true when plugin config exists and thread config may need app patches. */
@@ -305,6 +309,8 @@ export async function buildCodexPluginThreadConfig(
   // A deny-all thread needs no native settings; read them only before admitting an app.
   let appAdmissionConfig: Promise<CodexPluginThreadAppAdmissionConfig> | undefined;
   const getAdmissionConfig = () => (appAdmissionConfig ??= readCodexConfigForAppAdmission(params));
+  let nativeToolKeys: ReturnType<typeof readCodexNativeAppToolKeys> | undefined;
+  const getNativeToolKeys = () => (nativeToolKeys ??= readCodexNativeAppToolKeys(params.request));
 
   const diagnostics: CodexPluginThreadConfigDiagnostic[] = [
     ...inventory.diagnostics,
@@ -397,7 +403,7 @@ export async function buildCodexPluginThreadConfig(
         !record.policy.allowDestructiveActions || record.policy.destructiveApprovalMode === "ask"
           ? buildCodexAppApprovalOverrides(
               admissionConfig.config,
-              app,
+              withCodexNativeAppToolKeys(app, await getNativeToolKeys()),
               record.policy.allowDestructiveActions ? "ask" : "deny",
             )
           : undefined,
@@ -452,7 +458,7 @@ export async function buildCodexPluginThreadConfig(
       !accountPolicy.allowDestructiveActions || accountPolicy.destructiveApprovalMode === "ask"
         ? buildCodexAppApprovalOverrides(
             admissionConfig.config,
-            accountApp,
+            withCodexNativeAppToolKeys(accountApp, await getNativeToolKeys()),
             accountPolicy.allowDestructiveActions ? "ask" : "deny",
           )
         : undefined,
@@ -632,11 +638,12 @@ export async function refreshCodexPluginAppApprovalPolicy(params: {
   // A persisted binding can be replayed before any normal turn after restart.
   // Fresh targeted inventory retains the current non-read-only tool scope.
   const readParams = { ...params, appCacheKey: "approval-policy-replay" };
-  const [inventory, admissionConfig] = await Promise.all([
+  const [inventory, admissionConfig, nativeToolKeys] = await Promise.all([
     targetAppIds.length > 0
       ? refreshCodexPluginAppInventory(readParams, new CodexAppInventoryCache(), { targetAppIds })
       : undefined,
     readCodexConfigForAppAdmission(readParams),
+    targetAppIds.length > 0 ? readCodexNativeAppToolKeys(params.request) : undefined,
   ]);
   const configPatch = disableUnlistedCodexApps(
     buildCodexPluginAppsConfigPatchFromPolicyContext(params.policyContext),
@@ -658,7 +665,7 @@ export async function refreshCodexPluginAppApprovalPolicy(params: {
         policy,
         buildCodexAppApprovalOverrides(
           admissionConfig.config,
-          app,
+          withCodexNativeAppToolKeys(app, nativeToolKeys),
           policy.allowDestructiveActions ? "ask" : "deny",
         ),
       );

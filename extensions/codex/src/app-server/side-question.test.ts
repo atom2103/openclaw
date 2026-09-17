@@ -1217,6 +1217,28 @@ describe("runCodexAppServerSideQuestion", () => {
       const client = createFakeClient({ completeTurn: rejectsReplay });
       const baseRequest = client.request.getMockImplementation()!;
       client.request.mockImplementation(async (method: string, requestParams?: unknown) => {
+        if (method === "mcpServerStatus/list") {
+          return {
+            data: [
+              {
+                name: "codex_apps",
+                tools: {
+                  write: {
+                    name: "write",
+                    annotations: { readOnlyHint: false },
+                    _meta: { connector_id: "ask-app" },
+                  },
+                  "false.read": {
+                    name: "false.read",
+                    annotations: { readOnlyHint: true },
+                    _meta: { connector_id: "false-app" },
+                  },
+                },
+              },
+            ],
+            nextCursor: null,
+          };
+        }
         if (method === "app/installed") {
           return {
             apps: ["ask-app", "false-app", "unbound-app"].map((id) => ({

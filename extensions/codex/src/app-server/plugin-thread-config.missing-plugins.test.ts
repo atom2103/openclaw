@@ -57,6 +57,28 @@ describe("missing Codex plugin permissions", () => {
       const errorLog = vi.spyOn(embeddedAgentLog, "error").mockImplementation(() => {});
       try {
         const request = vi.fn(async (method: string, params?: unknown) => {
+          if (method === "mcpServerStatus/list") {
+            return {
+              data: [
+                {
+                  name: "codex_apps",
+                  tools: {
+                    "calendar.write": {
+                      name: "calendar.write",
+                      annotations: { readOnlyHint: false },
+                      _meta: { connector_id: "account-calendar-app" },
+                    },
+                    "calendar.read": {
+                      name: "calendar.read",
+                      annotations: { readOnlyHint: true },
+                      _meta: { connector_id: "account-calendar-app" },
+                    },
+                  },
+                },
+              ],
+              nextCursor: null,
+            };
+          }
           if (method === "app/installed" || method === "app/read") {
             return codexAppInventoryResponse(
               method,
@@ -105,6 +127,8 @@ describe("missing Codex plugin permissions", () => {
                     default_tools_enabled: true,
                     tools: {
                       write: { enabled: true, approval_mode: "approve" },
+                      "calendar.write": { enabled: true, approval_mode: "approve" },
+                      "calendar.read": { enabled: true, approval_mode: "approve" },
                       read: { enabled: true, approval_mode: "approve" },
                     },
                   },
@@ -163,8 +187,12 @@ describe("missing Codex plugin permissions", () => {
         if (restriction === false || restriction === "ask") {
           const expectedTools =
             restriction === false
-              ? { write: { enabled: false, approval_mode: "auto" }, Write: { enabled: false } }
-              : { write: { approval_mode: "auto" } };
+              ? {
+                  write: { enabled: false, approval_mode: "auto" },
+                  Write: { enabled: false },
+                  "calendar.write": { enabled: false, approval_mode: "auto" },
+                }
+              : { write: { approval_mode: "auto" }, "calendar.write": { approval_mode: "auto" } };
           expect(config.configPatch?.apps).toMatchObject({
             "account-calendar-app": { tools: expectedTools },
           });

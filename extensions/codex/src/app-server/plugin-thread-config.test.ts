@@ -24,6 +24,7 @@ import {
 import {
   appInfo,
   appSummary,
+  nativeAppTools,
   pluginDetail,
   pluginInstalled,
   pluginList,
@@ -677,6 +678,9 @@ describe("Codex plugin thread config", () => {
         request: async (method, params) => codexAppInventoryResponse(method, [calendarApp], params),
       });
       const request = vi.fn(async (method: string, params?: unknown) => {
+        if (method === "mcpServerStatus/list") {
+          return nativeAppTools([calendarApp]);
+        }
         if (method === "plugin/installed" || method === "plugin/list") {
           return pluginList([pluginSummary("google-calendar", { installed: true, enabled: true })]);
         }
@@ -906,6 +910,9 @@ describe("Codex plugin thread config", () => {
         request: async (method, params) => codexAppInventoryResponse(method, [linearApp], params),
       });
       const request = vi.fn(async (method: string, params?: unknown) => {
+        if (method === "mcpServerStatus/list") {
+          return nativeAppTools([linearApp]);
+        }
         if (method === "app/installed" || method === "app/read") {
           return codexAppInventoryResponse(
             method,

@@ -9,6 +9,11 @@ import {
   isSafeFenceBreak,
   scanFenceSpans,
 } from "../../packages/markdown-core/src/fences.js";
+import {
+  protectBreakIndex,
+  scanUnbreakableSpans,
+  type UnbreakableSpan,
+} from "./embedded-agent-link-spans.js";
 
 export type BlockReplyChunking = {
   minChars: number;
@@ -248,6 +253,7 @@ export class EmbeddedBlockChunker {
       fence.end -= removedLength;
       removedFenceInfoLength += removedLength;
     }
+    const unbreakableSpans = scanUnbreakableSpans(source, fenceSpans, maxChars);
     const sourceOffset = (index: number) =>
       Math.max(
         0,
@@ -305,11 +311,23 @@ export class EmbeddedBlockChunker {
       const view = source.slice(start);
       const breakResult =
         force && remainingLength <= maxChars
-          ? this.#pickPreferredBreakIndex(view, fenceSpans, chunking, false, 1, start, openFence)
+          ? this.#pickPreferredBreakIndex(
+              view,
+              fenceSpans,
+              unbreakableSpans,
+              chunking,
+              true,
+              false,
+              1,
+              start,
+              openFence,
+            )
           : this.#pickBreakIndex(
               view,
               fenceSpans,
+              unbreakableSpans,
               chunking,
+              force,
               force ? 1 : undefined,
               start,
               maxChars - reopenPrefix.length,
@@ -411,7 +429,9 @@ export class EmbeddedBlockChunker {
   #pickPreferredBreakIndex(
     buffer: string,
     fenceSpans: FenceSpan[],
+    unbreakableSpans: UnbreakableSpan[],
     chunking: BlockReplyChunking,
+    force: boolean,
     reverse: boolean,
     minCharsOverride?: number,
     offset = 0,
@@ -432,7 +452,7 @@ export class EmbeddedBlockChunker {
         offset,
       });
       if (paragraphIdx !== -1) {
-        return { index: paragraphIdx };
+        return { index: protectBreakIndex(unbreakableSpans, paragraphIdx, offset, force) };
       }
     }
 
@@ -445,7 +465,7 @@ export class EmbeddedBlockChunker {
         offset,
       });
       if (newlineIdx !== -1) {
-        return { index: newlineIdx };
+        return { index: protectBreakIndex(unbreakableSpans, newlineIdx, offset, force) };
       }
     }
 
@@ -458,7 +478,7 @@ export class EmbeddedBlockChunker {
         openFence,
       );
       if (sentenceIdx !== -1) {
-        return { index: sentenceIdx };
+        return { index: protectBreakIndex(unbreakableSpans, sentenceIdx, offset, force) };
       }
     }
 
@@ -468,7 +488,9 @@ export class EmbeddedBlockChunker {
   #pickBreakIndex(
     buffer: string,
     fenceSpans: FenceSpan[],
+    unbreakableSpans: UnbreakableSpan[],
     chunking: BlockReplyChunking,
+    force: boolean,
     minCharsOverride?: number,
     offset = 0,
     maxCharsOverride?: number,
@@ -484,7 +506,9 @@ export class EmbeddedBlockChunker {
     const preferred = this.#pickPreferredBreakIndex(
       window,
       fenceSpans,
+      unbreakableSpans,
       chunking,
+      force,
       true,
       minChars,
       offset,
@@ -500,7 +524,7 @@ export class EmbeddedBlockChunker {
 
     for (let i = window.length - 1; i >= minChars; i--) {
       if (/\s/.test(window.charAt(i)) && isSafeFenceBreak(fenceSpans, offset + i)) {
-        return { index: i };
+        return { index: protectBreakIndex(unbreakableSpans, i, offset, force) };
       }
     }
 
@@ -519,7 +543,7 @@ export class EmbeddedBlockChunker {
       if (fence) {
         const reopenFenceLine = resolveFenceReopenLine(fence, chunking.maxChars);
         if (!reopenFenceLine) {
-          return { index: forcedBreakIndex };
+          return { index: protectBreakIndex(unbreakableSpans, forcedBreakIndex, offset, force) };
         }
         // Synthetic fence wrappers consume the same transport budget as source
         // text; reserving them here keeps every emitted payload deliverable.
@@ -530,7 +554,7 @@ export class EmbeddedBlockChunker {
           Math.max(1, maxChars - closeFenceLine.length - 1),
         ).length;
         if (fenceBreakIndex <= 0) {
-          return { index: forcedBreakIndex };
+          return { index: protectBreakIndex(unbreakableSpans, forcedBreakIndex, offset, force) };
         }
         const closeFenceStart = findFenceCloseLineStart(buffer, fence, offset);
         return {
@@ -541,7 +565,7 @@ export class EmbeddedBlockChunker {
           fenceSplit: { closeFenceLine, reopenFenceLine, fence },
         };
       }
-      return { index: forcedBreakIndex };
+      return { index: protectBreakIndex(unbreakableSpans, forcedBreakIndex, offset, force) };
     }
 
     return { index: -1 };

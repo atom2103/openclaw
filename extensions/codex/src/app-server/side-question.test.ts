@@ -1219,7 +1219,7 @@ describe("runCodexAppServerSideQuestion", () => {
       client.request.mockImplementation(async (method: string, requestParams?: unknown) => {
         if (method === "app/installed") {
           return {
-            apps: ["ask-app", "unbound-app"].map((id) => ({
+            apps: ["ask-app", "false-app", "unbound-app"].map((id) => ({
               id,
               runtimeName: id,
               enabled: true,
@@ -1228,10 +1228,14 @@ describe("runCodexAppServerSideQuestion", () => {
           };
         }
         if (method === "app/read") {
-          expect(requestParams).toEqual({ appIds: ["ask-app"], includeTools: true });
+          expect(requestParams).toEqual({
+            appIds: outcome === "unbound-native-app" ? ["false-app"] : ["ask-app", "false-app"],
+            includeTools: true,
+          });
           return {
-            apps:
-              outcome === "missing-app"
+            apps: [
+              { id: "false-app", name: "False", pluginDisplayNames: [], toolSummaries: [] },
+              ...(outcome === "missing-app" || outcome === "unbound-native-app"
                 ? []
                 : [
                     {
@@ -1257,7 +1261,8 @@ describe("runCodexAppServerSideQuestion", () => {
                         },
                       ],
                     },
-                  ],
+                  ]),
+            ],
             missingAppIds: outcome === "missing-app" ? ["ask-app"] : [],
           };
         }
@@ -1381,13 +1386,7 @@ describe("runCodexAppServerSideQuestion", () => {
       }
 
       const methods = client.request.mock.calls.map(([method]) => method);
-      if (outcome === "unbound-native-app") {
-        expect(methods).not.toContain("app/installed");
-        expect(methods).not.toContain("app/read");
-        expect(methods).not.toContain("config/batchWrite");
-      } else {
-        expect(methods.indexOf("app/read")).toBeLessThan(methods.indexOf("thread/fork"));
-      }
+      expect(methods.indexOf("app/read")).toBeLessThan(methods.indexOf("thread/fork"));
       expect(methods.filter((method) => method === "config/read")).toHaveLength(1);
       expect(methods).not.toContain("config/batchWrite");
       expect(methods).not.toContain("config/value/write");
@@ -1428,6 +1427,7 @@ describe("runCodexAppServerSideQuestion", () => {
         },
         "false-app": {
           enabled: true,
+          tools: {},
           destructive_enabled: false,
           open_world_enabled: true,
           default_tools_approval_mode: "auto",

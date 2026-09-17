@@ -61,9 +61,9 @@ export function buildCodexAppApprovalOverrides(
       const existing = isJsonObject(overrides[section]) ? overrides[section] : {};
       overrides[section] = Object.fromEntries([
         ...Object.entries(existing),
-        ...projected.map(([name, fields]) => [
+        ...projected.map(([name, projectedFields]) => [
           name,
-          Object.assign({}, fields, isJsonObject(existing[name]) ? existing[name] : {}),
+          Object.assign({}, projectedFields, isJsonObject(existing[name]) ? existing[name] : {}),
         ]),
       ]);
     }

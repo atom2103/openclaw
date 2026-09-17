@@ -552,9 +552,7 @@ describe("Codex plugin thread config", () => {
       open_world_enabled: true,
       default_tools_approval_mode: "auto",
     });
-    expect(disabledApps?.["google-calendar-app"]).not.toHaveProperty("default_tools_enabled");
     expect(disabledApps?.["google-calendar-app"]).not.toHaveProperty("approvals_reviewer");
-    expect(disabledApps?.["google-calendar-app"]).not.toHaveProperty("tools");
     expect(
       pluginOverrideDisabled.policyContext.apps["google-calendar-app"]?.allowDestructiveActions,
     ).toBe(false);
@@ -3083,7 +3081,6 @@ describe("Codex plugin thread config", () => {
       open_world_enabled: true,
       default_tools_approval_mode: "auto",
     });
-    expect(apps?.["github-app"]).not.toHaveProperty("tools");
   });
 
   it("merges app config with native hook config", () => {

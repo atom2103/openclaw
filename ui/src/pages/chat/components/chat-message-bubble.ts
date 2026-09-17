@@ -263,6 +263,7 @@ export function renderGroupedMessage(
     fetchLinkFavicon?: LinkFaviconFetcher;
     pluginToolIcons?: PluginToolIcons;
     githubRepo?: MarkdownRenderOptions["githubRepo"];
+    githubRepositories?: MarkdownRenderOptions["githubRepositories"];
     onOpenWorkspaceFile?: (target: { path: string; line?: number | null }) => void;
     avatar?: TemplateResult | typeof nothing;
     entryId?: string;
@@ -351,6 +352,9 @@ export function renderGroupedMessage(
     codeBlockInteraction: role === "assistant" ? "interactive" : "static",
     fileLinks: true,
     githubRepo: role === "assistant" ? (opts.githubRepo ?? null) : null,
+    ...(role === "assistant" && opts.githubRepositories
+      ? { githubRepositories: opts.githubRepositories }
+      : {}),
     interactiveImages: opts.onOpenImage !== undefined,
     sessionLinks: true,
     tableInteractions: "enabled",

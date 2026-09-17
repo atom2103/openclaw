@@ -1,3 +1,8 @@
+import type {
+  MarkdownGitHubRepository,
+  MarkdownGitHubRepositoryAliases,
+} from "./markdown-github-repositories.ts";
+
 type MarkdownCodeBlockChrome = "copy" | "none";
 type MarkdownCodeBlockInteraction = "interactive" | "static";
 type MarkdownTableInteractions = "enabled" | "none";
@@ -8,7 +13,8 @@ export type MarkdownRenderOptions = {
   codeBlockChrome?: MarkdownCodeBlockChrome;
   codeBlockInteraction?: MarkdownCodeBlockInteraction;
   fileLinks?: boolean;
-  githubRepo?: { owner: string; repo: string } | null;
+  githubRepo?: MarkdownGitHubRepository | null;
+  githubRepositories?: readonly MarkdownGitHubRepositoryAliases[];
   interactiveImages?: boolean;
   linkFavicons?: boolean;
   progressBars?: boolean;
@@ -17,6 +23,11 @@ export type MarkdownRenderOptions = {
   sessionLinks?: boolean;
   tableInteractions?: MarkdownTableInteractions;
 };
+
+export type MarkdownGitHubContext = Pick<
+  MarkdownRenderOptions,
+  "githubRepo" | "githubRepositories"
+>;
 
 export type MarkdownRenderEnv = Required<MarkdownRenderOptions> & {
   streamingOpenFence?: boolean;
@@ -31,6 +42,7 @@ export function normalizeMarkdownRenderOptions(
     codeBlockInteraction: options.codeBlockInteraction ?? "static",
     fileLinks: options.fileLinks ?? false,
     githubRepo: options.githubRepo ?? null,
+    githubRepositories: options.githubRepositories ?? [],
     interactiveImages: options.interactiveImages ?? false,
     linkFavicons: options.linkFavicons ?? false,
     progressBars: options.progressBars ?? false,

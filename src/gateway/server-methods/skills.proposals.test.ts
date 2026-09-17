@@ -4,10 +4,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { asNullableRecord } from "@openclaw/normalization-core/record-coerce";
+import { Value } from "typebox/value";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  SkillsCuratorLiveStatusResultSchema,
+  SkillsCuratorStatusResultSchema,
+} from "../../../packages/gateway-protocol/src/schema/agents-models-skills.js";
+import { applySkillProposal, proposeCreateSkill } from "../../skills/workshop/service.js";
 import { resolveWorkshopSkillsDir } from "../../skills/workshop/skills-root.js";
 import { readSkillProposalEvents } from "../../skills/workshop/store-evaluation.js";
 import { writeConfigMachineState } from "../../state/config-machine-state-write.js";
+import { openOpenClawStateDatabase } from "../../state/openclaw-state-db.js";
 import {
   createOpenClawTestState,
   type OpenClawTestState,
@@ -399,6 +406,162 @@ describe("skills proposal gateway handlers", () => {
         collectionReview: { workspace: { attemptedAtMs: 100, succeededAtMs: 101 } },
         experienceReview: { workspace: { attemptedAtMs: 102, outcome: "nothing" } },
       },
+    });
+  });
+
+  it("returns live Workshop inventory from current runtime roots without proposal history", async () => {
+    const agentDir = testState.path("custom-agent");
+    const config = { agents: { entries: { custom: { agentDir } } } };
+    const root = resolveWorkshopSkillsDir(config, "custom", testState.env);
+    for (const name of ["direct", "unused"]) {
+      await fs.mkdir(path.join(root, name), { recursive: true });
+      await fs.writeFile(
+        path.join(root, name, "SKILL.md"),
+        `---\nname: ${name}\ndescription: Directly created skill\n---\nInstructions\n`,
+      );
+    }
+    const skillFile = path.join(root, "direct", "SKILL.md");
+    openOpenClawStateDatabase({ env: testState.env })
+      .db.prepare(
+        `INSERT INTO skill_usage (skill_file, skill_key, skill_name, skill_source, first_used_at_ms, last_used_at_ms, use_count, last_agent_id)
+       VALUES (?, 'old-name', 'Old Name', 'workspace', 100, 200, 3, 'custom')`,
+      )
+      .run(skillFile);
+    const context = { getRuntimeConfig: () => config };
+    const result = await callHandler(
+      "skills.curator.status",
+      {},
+      {
+        context,
+        client: {
+          connect: {
+            minProtocol: 1,
+            maxProtocol: 1,
+            client: { id: "cli", version: "test", platform: "test", mode: "cli" },
+            role: "operator",
+            scopes: ["operator.read"],
+            caps: ["skill-curator-live-inventory"],
+          },
+        },
+      },
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      response: {
+        inventory: "live-workshop",
+        counts: { active: 2, stale: 0, archived: 0 },
+        skills: [
+          {
+            skillFile,
+            skillName: "direct",
+            skillKey: "direct",
+            createdAtMs: null,
+            stateChangedAtMs: null,
+            useCount: 3,
+            lastUsedAtMs: 200,
+          },
+          {
+            skillFile: path.join(root, "unused", "SKILL.md"),
+            createdAtMs: null,
+            stateChangedAtMs: null,
+            useCount: 0,
+            lastUsedAtMs: null,
+          },
+        ],
+      },
+    });
+    await expect(callHandler("skills.curator.status", {}, { context })).resolves.toMatchObject({
+      ok: true,
+      response: { counts: { active: 0, stale: 0, archived: 0 }, skills: [] },
+    });
+  });
+
+  it("projects only known-date live entries for legacy clients using the unchanged closed schema", async () => {
+    const config = { agents: { entries: { main: { agentDir: testState.path("legacy-agent") } } } };
+    const proposal = await proposeCreateSkill({
+      config,
+      agentId: "main",
+      env: testState.env,
+      workspaceDir: mocks.workspaceDir,
+      name: "Known",
+      description: "Known skill",
+      content: "# Known\nInstructions\n",
+      createdBy: "gateway",
+    });
+    const applied = await applySkillProposal({
+      config,
+      agentId: "main",
+      env: testState.env,
+      workspaceDir: mocks.workspaceDir,
+      proposalId: proposal.record.id,
+      expectedRevisionHash: proposal.revisionHash,
+    });
+    if (!applied.record.appliedAt) {
+      throw new Error("Expected an applied proposal date");
+    }
+    const root = resolveWorkshopSkillsDir(config, "main", testState.env);
+    await fs.mkdir(path.join(root, "direct"), { recursive: true });
+    await fs.writeFile(
+      path.join(root, "direct", "SKILL.md"),
+      "---\nname: direct\ndescription: Direct skill\n---\nInstructions\n",
+    );
+    const context = { getRuntimeConfig: () => config };
+    const result = await callHandler("skills.curator.status", {}, { context });
+    expect(result.ok).toBe(true);
+    expect(Value.Check(SkillsCuratorStatusResultSchema, result.response)).toBe(true);
+    expect(result.response).not.toHaveProperty("inventory");
+    expect(result.response).toMatchObject({
+      counts: { active: 1, stale: 0, archived: 0 },
+      skills: [
+        {
+          skillFile: proposal.record.target.skillFile,
+          createdAtMs: Date.parse(applied.record.appliedAt),
+          stateChangedAtMs: Date.parse(applied.record.appliedAt),
+        },
+      ],
+    });
+    await fs.writeFile(
+      proposal.record.target.skillFile,
+      `---\nname: known\ndescription: Known skill\nmetadata: '{"openclaw":{"skillKey":""}}'\n---\nInstructions\n`,
+    );
+    for (const caps of [[], ["skill-curator-live-inventory"]]) {
+      const updated = await callHandler(
+        "skills.curator.status",
+        {},
+        {
+          context,
+          client: {
+            connect: {
+              minProtocol: 1,
+              maxProtocol: 1,
+              client: { id: "cli", version: "test", platform: "test", mode: "cli" },
+              role: "operator",
+              scopes: ["operator.read"],
+              caps,
+            },
+          },
+        },
+      );
+      expect(updated.ok).toBe(true);
+      expect(
+        Value.Check(
+          caps.length ? SkillsCuratorLiveStatusResultSchema : SkillsCuratorStatusResultSchema,
+          updated.response,
+        ),
+      ).toBe(true);
+      expect(updated.response).toMatchObject({
+        skills: expect.arrayContaining([
+          expect.objectContaining({
+            skillFile: proposal.record.target.skillFile,
+            skillKey: "known",
+          }),
+        ]),
+      });
+    }
+    await fs.unlink(proposal.record.target.skillFile);
+    await expect(callHandler("skills.curator.status", {}, { context })).resolves.toMatchObject({
+      ok: true,
+      response: { counts: { active: 0, stale: 0, archived: 0 }, skills: [] },
     });
   });
 

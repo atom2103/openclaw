@@ -1132,6 +1132,18 @@ export const SkillsCuratorActionParamsSchema = closedObject({ skill: NonEmptyStr
 
 export const SkillsCuratorActionResultSchema = SkillCuratorEntrySchema;
 
+export const SkillCuratorLiveEntrySchema = closedObject({
+  ...SkillCuratorEntrySchema.properties,
+  createdAtMs: Type.Union([Type.Number(), Type.Null()]),
+  stateChangedAtMs: Type.Union([Type.Number(), Type.Null()]),
+});
+
+export const SkillsCuratorLiveStatusResultSchema = closedObject({
+  ...SkillsCuratorStatusResultSchema.properties,
+  inventory: Type.Literal("live-workshop"),
+  skills: Type.Array(SkillCuratorLiveEntrySchema),
+});
+
 export const GitHubIdentityScopeSchema = Type.Union([
   Type.Literal("system"),
   Type.Literal("agent"),
@@ -1507,6 +1519,10 @@ export type SkillsProposalApplyResult = Static<typeof SkillsProposalApplyResultS
 export type SkillsProposalRecordResult = Static<typeof SkillsProposalRecordResultSchema>;
 export type SkillsCuratorStatusParams = Static<typeof SkillsCuratorStatusParamsSchema>;
 export type SkillsCuratorStatusResult = Static<typeof SkillsCuratorStatusResultSchema>;
+export type SkillsCuratorLiveStatusResult = Static<typeof SkillsCuratorLiveStatusResultSchema>;
+export type SkillsCuratorCompatibleStatusResult =
+  | SkillsCuratorStatusResult
+  | SkillsCuratorLiveStatusResult;
 export type SkillsCuratorActionParams = Static<typeof SkillsCuratorActionParamsSchema>;
 export type SkillsCuratorActionResult = Static<typeof SkillsCuratorActionResultSchema>;
 export type SkillsSecurityVerdictsParams = Static<typeof SkillsSecurityVerdictsParamsSchema>;

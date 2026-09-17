@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { hasInternalDiagnosticEventInterest } from "../../infra/diagnostic-event-listener-presence.js";
@@ -21,6 +22,7 @@ import {
   applySkillProposal as applySkillProposalImpl,
   proposeCreateSkill as proposeCreateSkillImpl,
 } from "./service.js";
+import { resolveWorkshopSkillsDir } from "./skills-root.js";
 
 let testState: OpenClawTestState;
 const workshopConfig: OpenClawConfig = {};
@@ -31,6 +33,25 @@ const applySkillProposal = (
 const proposeCreateSkill = (
   input: OptionalWorkshopConfig<Parameters<typeof proposeCreateSkillImpl>[0]>,
 ) => proposeCreateSkillImpl({ config: workshopConfig, ...input });
+
+async function writeInventorySkill(
+  config: OpenClawConfig,
+  agentId: string,
+  directory: string,
+  name = directory,
+) {
+  const skillFile = path.join(
+    resolveWorkshopSkillsDir(config, agentId, testState.env),
+    directory,
+    "SKILL.md",
+  );
+  await fs.mkdir(path.dirname(skillFile), { recursive: true });
+  await fs.writeFile(
+    skillFile,
+    `---\nname: ${name}\ndescription: Inventory fixture\n---\nInstructions\n`,
+  );
+  return skillFile;
+}
 
 beforeEach(async () => {
   resetDiagnosticEventsForTest();
@@ -161,14 +182,14 @@ describe("skill curator usage tracking", () => {
       )
       .run(skillFile, "daily-brief", "Daily Brief", "workspace", 1_000, 2_000, 3, "main");
 
-    expect(getSkillCuratorStatus({ env: testState.env })).toMatchObject({
+    expect(getSkillCuratorStatus({ config: workshopConfig, env: testState.env })).toMatchObject({
       counts: { active: 1, stale: 0, archived: 0 },
       overlaps: [],
       skills: [
         {
           skillFile,
           skillKey: "daily-brief",
-          skillName: "Daily Brief",
+          skillName: "daily-brief",
           state: "active",
           pinned: false,
           createdAtMs: Date.parse(applied.record.appliedAt!),
@@ -180,11 +201,98 @@ describe("skill curator usage tracking", () => {
       ],
     });
 
+    expect(
+      getSkillCuratorStatus({
+        config: { agents: { entries: { other: { agentDir: testState.path("other-agent") } } } },
+        env: testState.env,
+      }).skills,
+    ).toEqual([]);
     await fs.unlink(skillFile);
-    expect(getSkillCuratorStatus({ env: testState.env })).toMatchObject({
+    expect(getSkillCuratorStatus({ config: workshopConfig, env: testState.env })).toMatchObject({
       counts: { active: 0, stale: 0, archived: 0 },
       skills: [],
       overlaps: [],
     });
+    expect(
+      database.db
+        .prepare("SELECT count(*) AS count FROM skill_workshop_proposals WHERE status = 'applied'")
+        .get(),
+    ).toEqual({ count: 1 });
+  });
+
+  it("uses current multi-agent roots and file identity despite disabled skills and duplicate roots", async () => {
+    const alphaDir = testState.path("alpha-agent");
+    const config: OpenClawConfig = {
+      agents: {
+        entries: {
+          alpha: { agentDir: alphaDir, skills: ["other"] },
+          beta: { agentDir: testState.path("beta-agent") },
+          mirror: { agentDir: alphaDir },
+          missing: { agentDir: testState.path("absent-agent") },
+        },
+      },
+      skills: { entries: { shared: { enabled: false } } },
+    };
+    const alphaFile = await writeInventorySkill(config, "alpha", "first", "shared");
+    const betaFile = await writeInventorySkill(config, "beta", "second", "shared");
+    const unusedFile = await writeInventorySkill(config, "beta", "unused");
+    const database = openOpenClawStateDatabase({ env: testState.env });
+    const insert = database.db.prepare(
+      `INSERT INTO skill_usage (skill_file, skill_key, skill_name, skill_source, first_used_at_ms, last_used_at_ms, use_count, last_agent_id) VALUES (?, 'shared', 'Old Name', 'workspace', 10, 20, ?, 'alpha')`,
+    );
+    insert.run(alphaFile, 1);
+    insert.run(betaFile, 2);
+    const read = () => getSkillCuratorStatus({ config, env: testState.env });
+    expect(read()).toMatchObject({
+      inventory: "live-workshop",
+      counts: { active: 3, stale: 0, archived: 0 },
+      skills: [
+        {
+          skillFile: alphaFile,
+          skillName: "shared",
+          useCount: 1,
+          lastUsedAtMs: 20,
+          createdAtMs: null,
+          stateChangedAtMs: null,
+        },
+        {
+          skillFile: betaFile,
+          skillName: "shared",
+          useCount: 2,
+          lastUsedAtMs: 20,
+          createdAtMs: null,
+          stateChangedAtMs: null,
+        },
+        {
+          skillFile: unusedFile,
+          useCount: 0,
+          lastUsedAtMs: null,
+          createdAtMs: null,
+          stateChangedAtMs: null,
+        },
+      ],
+    });
+    await writeInventorySkill(config, "alpha", "first", "renamed");
+    expect(read().skills[0]).toMatchObject({
+      skillFile: alphaFile,
+      skillName: "renamed",
+      skillKey: "renamed",
+      useCount: 1,
+    });
+    const movedFile = path.join(path.dirname(path.dirname(betaFile)), "moved", "SKILL.md");
+    await fs.rename(path.dirname(betaFile), path.dirname(movedFile));
+    expect(read().skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          skillFile: movedFile,
+          skillName: "shared",
+          useCount: 0,
+          lastUsedAtMs: null,
+        }),
+      ]),
+    );
+    expect(read().skills.map((skill) => skill.skillFile)).not.toContain(betaFile);
+    config.agents = { entries: { alpha: { agentDir: testState.path("replacement-root") } } };
+    expect(read()).toMatchObject({ counts: { active: 0, stale: 0, archived: 0 }, skills: [] });
   });
 });

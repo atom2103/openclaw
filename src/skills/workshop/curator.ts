@@ -1,6 +1,7 @@
-import fs from "node:fs";
 import path from "node:path";
+import { listAgentIds } from "../../agents/agent-scope-config.js";
 import { canonicalizePath } from "../../agents/utils/paths.js";
+import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import {
   onTrustedInternalDiagnosticEvent,
   type DiagnosticSkillUsedEvent,
@@ -21,6 +22,7 @@ import {
   type SkillExperienceReviewStatus,
 } from "./collection-review-state.js";
 import { parseSkillProposalRow } from "./store-sqlite-record.js";
+import { listWritableWorkshopSkillSummaries } from "./workspace-skill-read.js";
 
 const log = createSubsystemLogger("skills/curator");
 
@@ -32,6 +34,7 @@ type CuratorDatabase = Pick<OpenClawStateDatabase, "skill_usage" | "skill_worksh
 type SkillOverlapCandidate = { left: string; right: string; score: number };
 
 export type SkillCuratorStatus = {
+  inventory: "live-workshop";
   lastAttemptAtMs: number | null;
   lastSuccessAtMs: number | null;
   lastError: string | null;
@@ -44,8 +47,8 @@ export type SkillCuratorStatus = {
     skillName: string;
     state: SkillLifecycleState;
     pinned: boolean;
-    createdAtMs: number;
-    stateChangedAtMs: number;
+    createdAtMs: number | null;
+    stateChangedAtMs: number | null;
     lastUsedAtMs: number | null;
     useCount: number;
     archivedReason: string | null;
@@ -93,7 +96,7 @@ function readSkillUsageByFile(
 }
 
 export function getSkillCuratorStatus(
-  options: OpenClawStateDatabaseOptions = {},
+  options: OpenClawStateDatabaseOptions & { config: OpenClawConfig },
 ): SkillCuratorStatus {
   const { database, kysely } = curatorDb(options);
   const state = readConfigMachineState<{
@@ -113,31 +116,35 @@ export function getSkillCuratorStatus(
       .orderBy("applied_at", "asc")
       .orderBy("proposal_id", "asc"),
   ).rows;
-  const curatedByFile = new Map<
-    string,
-    { skillFile: string; skillKey: string; skillName: string; createdAtMs: number }
-  >();
+  const createdAtByFile = new Map<string, number>();
   for (const row of proposalRows) {
     const record = parseSkillProposalRow(row);
-    if (!record || record.createdBy !== "skill-workshop" || !record.appliedAt) {
+    if (!record || !record.appliedAt) {
       continue;
     }
     const appliedAtMs = Date.parse(record.appliedAt);
     const skillFile = canonicalizePath(record.target.skillFile);
-    if (!Number.isFinite(appliedAtMs) || !fs.existsSync(skillFile)) {
+    if (!Number.isFinite(appliedAtMs)) {
       continue;
     }
-    const existing = curatedByFile.get(skillFile);
-    if (existing) {
-      existing.createdAtMs = Math.min(existing.createdAtMs, appliedAtMs);
-      continue;
-    }
-    curatedByFile.set(skillFile, {
+    createdAtByFile.set(
       skillFile,
-      skillKey: canonicalSkillKey(record.target.skillKey || record.target.skillName),
-      skillName: record.target.skillName,
-      createdAtMs: appliedAtMs,
-    });
+      Math.min(createdAtByFile.get(skillFile) ?? appliedAtMs, appliedAtMs),
+    );
+  }
+  const curatedByFile = new Map<
+    string,
+    { skillFile: string; skillKey: string; skillName: string }
+  >();
+  for (const agentId of listAgentIds(options.config)) {
+    for (const skill of listWritableWorkshopSkillSummaries({
+      config: options.config,
+      agentId,
+      env: options.env,
+    })) {
+      const skillFile = canonicalizePath(skill.filePath);
+      curatedByFile.set(skillFile, { skillFile, skillKey: skill.skillKey, skillName: skill.name });
+    }
   }
   const curatedSkills = [...curatedByFile.values()].toSorted((left, right) =>
     left.skillFile.localeCompare(right.skillFile),
@@ -152,16 +159,17 @@ export function getSkillCuratorStatus(
       skillFile: skill.skillFile,
       skillKey: skill.skillKey,
       skillName: skill.skillName,
-      createdAtMs: skill.createdAtMs,
+      createdAtMs: createdAtByFile.get(skill.skillFile) ?? null,
       state: "active",
       pinned: false,
-      stateChangedAtMs: skill.createdAtMs,
+      stateChangedAtMs: createdAtByFile.get(skill.skillFile) ?? null,
       lastUsedAtMs: usage?.lastUsedAtMs ?? null,
       useCount: usage?.useCount ?? 0,
       archivedReason: null,
     };
   });
   return {
+    inventory: "live-workshop",
     lastAttemptAtMs: state?.lastAttemptAtMs ?? null,
     lastSuccessAtMs: state?.lastSuccessAtMs ?? null,
     lastError: state?.lastError ?? null,

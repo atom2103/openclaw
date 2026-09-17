@@ -1,6 +1,10 @@
 // Gateway RPC handlers for skill discovery, install/update, and proposal workflows.
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
 import {
+  GATEWAY_CLIENT_CAPS,
+  hasGatewayClientCap,
+} from "../../../packages/gateway-protocol/src/client-info.js";
+import {
   buildClawHubTrustErrorDetails,
   ErrorCodes,
   errorShape,
@@ -429,7 +433,7 @@ export const skillsHandlers: GatewayRequestHandlers = {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, formatErrorMessage(err)));
     }
   },
-  "skills.curator.status": async ({ params, respond }) => {
+  "skills.curator.status": async ({ params, respond, context, client }) => {
     if (
       !assertValidParams(
         params,
@@ -440,7 +444,22 @@ export const skillsHandlers: GatewayRequestHandlers = {
     ) {
       return;
     }
-    respond(true, getSkillCuratorStatus(), undefined);
+    const status = getSkillCuratorStatus({ config: context.getRuntimeConfig() });
+    if (
+      hasGatewayClientCap(client?.connect.caps, GATEWAY_CLIENT_CAPS.SKILL_CURATOR_LIVE_INVENTORY)
+    ) {
+      respond(true, status, undefined);
+      return;
+    }
+    const { inventory: _inventory, ...legacyStatus } = status;
+    const skills = status.skills.filter(
+      (skill) => skill.createdAtMs !== null && skill.stateChangedAtMs !== null,
+    );
+    respond(
+      true,
+      { ...legacyStatus, skills, counts: { active: skills.length, stale: 0, archived: 0 } },
+      undefined,
+    );
   },
   "skills.curator.pin": (options) =>
     respondRetiredSkillCuratorAction(options, "skills.curator.pin"),

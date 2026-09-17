@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GATEWAY_CLIENT_CAPS } from "../../packages/gateway-protocol/src/client-info.js";
 import type { HelloOk } from "../../packages/gateway-protocol/src/schema/frames.js";
 import { createDeferred } from "../../test/helpers/promise.js";
 import type { OpenClawConfig } from "../config/config.js";
@@ -1545,6 +1546,16 @@ describe("callGateway url resolution", () => {
     await promise;
 
     expect(startCalls).toBe(1);
+  });
+
+  it("forwards optional inventory capabilities to the GatewayClient constructor", async () => {
+    setLocalLoopbackGatewayConfig();
+    const caps = [GATEWAY_CLIENT_CAPS.SKILL_CURATOR_LIVE_INVENTORY];
+    await callGateway({ method: "skills.curator.status", params: {}, caps });
+    expect(lastClientOptions?.caps).toEqual(caps);
+    expect(lastRequestOptions).toMatchObject({ method: "skills.curator.status", params: {} });
+    await callGateway({ method: "skills.curator.status", params: {} });
+    expect(lastClientOptions?.caps).toBeUndefined();
   });
 });
 

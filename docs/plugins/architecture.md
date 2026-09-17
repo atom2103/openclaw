@@ -234,6 +234,14 @@ metadata and its source captures retain the same process-local instance; a
 concurrent CLI process owns a separate instance. Releasing one capture cannot
 retire another capture or a still-running metadata owner.
 
+This follows the native lifetime-token pattern used for
+[interrupted SQLite snapshots](/reference/database-schemas/integrity-and-recovery).
+Executable CLI commands release captures through their existing invocation
+resource scope; Gateway captures remain with metadata retirement. Snapshot
+cleanup owns SQLite staging files, while plugin cleanup owns this capture subtree.
+Neither adds a second process-shutdown owner. Reclamation removes captured
+payload before its coordinator so a partial deletion remains retryable.
+
 Startup and hourly cleanup inspect only this owned subtree. An instance becomes
 eligible after one hour, but age alone never authorizes removal: cleanup must
 also acquire its native coordinator, proving that no producer retains custody.

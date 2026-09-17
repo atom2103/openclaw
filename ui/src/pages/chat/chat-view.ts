@@ -173,101 +173,104 @@ export function renderChat(props: ChatProps) {
     : props.queue;
   // Placement is visible work, but does not own an abortable model run yet.
   const runWorking = Boolean(placementStartup) || isChatRunWorking(props);
-  const thread = renderPluginSurface(
-    "transcript",
+  const defaultThread = renderChatThread(
     {
-      sessionKey: props.sessionKey,
-      agentId: props.currentAgentId,
-      messages: props.messages,
-      stream: props.stream,
-      loading: props.loading,
-    },
-    renderChatThread(
-      {
-        ...props,
-        loading: props.loading && !placementStartup,
-        streamStartedAt: placementStartup?.startedAt ?? props.streamStartedAt,
-        queue,
-        initialTurnId: props.placementStartup?.initialTurn?.id,
-        pendingInputs: pendingInputs?.page.items,
-        runActive: props.runActive === true,
-        runWorking,
-        startupLabel: chatStartupStatusLabel(props.startupStatus, placementStartup),
-        questionPrompts: props.gatewayQuestionPrompts,
-        agents: props.agentsList?.agents,
-        onOpenImage: openImage,
-        onRequestUpdate: requestUpdate,
-        queuedMessageAction: props.placementStartup?.initialTurn
-          ? {
-              id: props.placementStartup.initialTurn.id,
-              label:
-                props.placementStartup.action === "check-delivery"
-                  ? t("chat.queue.checkDelivery")
+      ...props,
+      loading: props.loading && !placementStartup,
+      streamStartedAt: placementStartup?.startedAt ?? props.streamStartedAt,
+      queue,
+      initialTurnId: props.placementStartup?.initialTurn?.id,
+      pendingInputs: pendingInputs?.page.items,
+      runActive: props.runActive === true,
+      runWorking,
+      startupLabel: chatStartupStatusLabel(props.startupStatus, placementStartup),
+      questionPrompts: props.gatewayQuestionPrompts,
+      agents: props.agentsList?.agents,
+      onOpenImage: openImage,
+      onRequestUpdate: requestUpdate,
+      queuedMessageAction: props.placementStartup?.initialTurn
+        ? {
+            id: props.placementStartup.initialTurn.id,
+            label:
+              props.placementStartup.action === "check-delivery"
+                ? t("chat.queue.checkDelivery")
+                : undefined,
+            onAction: props.connected ? props.onRetrySessionPlacementStartup : undefined,
+          }
+        : undefined,
+      onRetryQueuedMessage: props.connected && canCompose ? props.onQueueRetry : undefined,
+      onDiscardQueuedMessage: props.onQueueRemove,
+      onCompanionPrefill:
+        props.canSend && !props.suggestionComposer ? props.onCompanionPrefill : undefined,
+      commentAttachments: props.suggestionComposer ? undefined : props,
+      onAddToChat:
+        props.canSend && !props.suggestionComposer
+          ? (selection, anchorRect) => {
+              const focusComposer = () =>
+                props.transcript.scrollElement
+                  ?.closest(".card.chat")
+                  ?.querySelector<HTMLElement>(".agent-chat__composer-combobox > textarea")
+                  ?.focus({ preventScroll: true });
+              showChatAnnotationEditor({
+                anchorRect,
+                sourceRange: props.transcript.scrollElement
+                  ? resolveChatCommentAnchor(props.transcript.scrollElement, selection)?.range
                   : undefined,
-              onAction: props.connected ? props.onRetrySessionPlacementStartup : undefined,
+                comment: "",
+                readSignal: props.readSignal,
+                onCancel: focusComposer,
+                onSave: (comment): boolean => {
+                  if (props.readSignal?.aborted || !props.onAttachmentsChange) {
+                    return true;
+                  }
+                  const attachment = createChatSelectionAttachment(
+                    {
+                      ...selection,
+                      comment,
+                      sessionKey: props.sessionKey,
+                    },
+                    props.attachmentLimits,
+                  );
+                  if (!attachment) {
+                    return false;
+                  }
+                  props.onAttachmentsChange([
+                    ...(props.getAttachments?.() ?? props.attachments ?? []),
+                    attachment,
+                  ]);
+                  requestUpdate();
+                  focusComposer();
+                  return true;
+                },
+              });
             }
           : undefined,
-        onRetryQueuedMessage: props.connected && canCompose ? props.onQueueRetry : undefined,
-        onDiscardQueuedMessage: props.onQueueRemove,
-        onCompanionPrefill:
-          props.canSend && !props.suggestionComposer ? props.onCompanionPrefill : undefined,
-        commentAttachments: props.suggestionComposer ? undefined : props,
-        onAddToChat:
-          props.canSend && !props.suggestionComposer
-            ? (selection, anchorRect) => {
-                const focusComposer = () =>
-                  props.transcript.scrollElement
-                    ?.closest(".card.chat")
-                    ?.querySelector<HTMLElement>(".agent-chat__composer-combobox > textarea")
-                    ?.focus({ preventScroll: true });
-                showChatAnnotationEditor({
-                  anchorRect,
-                  sourceRange: props.transcript.scrollElement
-                    ? resolveChatCommentAnchor(props.transcript.scrollElement, selection)?.range
-                    : undefined,
-                  comment: "",
-                  readSignal: props.readSignal,
-                  onCancel: focusComposer,
-                  onSave: (comment): boolean => {
-                    if (props.readSignal?.aborted || !props.onAttachmentsChange) {
-                      return true;
-                    }
-                    const attachment = createChatSelectionAttachment(
-                      {
-                        ...selection,
-                        comment,
-                        sessionKey: props.sessionKey,
-                      },
-                      props.attachmentLimits,
-                    );
-                    if (!attachment) {
-                      return false;
-                    }
-                    props.onAttachmentsChange([
-                      ...(props.getAttachments?.() ?? props.attachments ?? []),
-                      attachment,
-                    ]);
-                    requestUpdate();
-                    focusComposer();
-                    return true;
-                  },
-                });
-              }
-            : undefined,
-        onOpenSession: props.onSessionSelect,
-        // Portaled menus can outlive a render; resolve focus from the current session owner.
-        onFocusComposer: () =>
-          props.transcript.scrollElement
-            ?.closest(".card.chat")
-            ?.querySelector<HTMLElement>(
-              "openclaw-plugin-view[data-plugin-composer], .agent-chat__composer-combobox > textarea",
-            )
-            ?.focus({ preventScroll: true }),
-      },
-      props.transcript,
-    ),
-    props.presented ?? true,
+      onOpenSession: props.onSessionSelect,
+      // Portaled menus can outlive a render; resolve focus from the current session owner.
+      onFocusComposer: () =>
+        props.transcript.scrollElement
+          ?.closest(".card.chat")
+          ?.querySelector<HTMLElement>(
+            "openclaw-plugin-view[data-plugin-composer], .agent-chat__composer-combobox > textarea",
+          )
+          ?.focus({ preventScroll: true }),
+    },
+    props.transcript,
   );
+  const thread = props.initialProgressPending
+    ? defaultThread
+    : renderPluginSurface(
+        "transcript",
+        {
+          sessionKey: props.sessionKey,
+          agentId: props.currentAgentId,
+          messages: props.messages,
+          stream: props.stream,
+          loading: props.loading,
+        },
+        defaultThread,
+        props.presented ?? true,
+      );
   // The composer keeps the outbox queue; only the transcript includes the
   // placement initial turn, whose retry action belongs to startup.
   const defaultComposer = renderChatComposer({

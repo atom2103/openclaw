@@ -95,7 +95,9 @@ export abstract class ChatPaneRetainedPresentation extends ChatPaneBoard {
     });
   }
 
-  private progressPresentationSessionKey: string | undefined;
+  private progressPresentationScope:
+    | { gateway: object; sessionKey: string; agentId: string | undefined }
+    | undefined;
   private progressPresentationReady = false;
   private retainedProgressCard:
     | {
@@ -170,40 +172,42 @@ export abstract class ChatPaneRetainedPresentation extends ChatPaneBoard {
     return this.resolveChatReadTarget();
   }
 
-  protected get progressCardInitialLoading(): boolean {
+  protected get initialProgressPending(): boolean {
     const state = this.state;
     if (!state) {
       return false;
     }
-    if (this.progressPresentationSessionKey !== state.sessionKey) {
-      this.progressPresentationSessionKey = state.sessionKey;
+    const gateway = gatewayPresentationScope(this.context.gateway);
+    const agentId = resolveUiSelectedSessionAgentId(state);
+    const previous = this.progressPresentationScope;
+    if (
+      previous?.gateway !== gateway ||
+      previous.sessionKey !== state.sessionKey ||
+      previous.agentId !== agentId
+    ) {
+      this.progressPresentationScope = { gateway, sessionKey: state.sessionKey, agentId };
       this.progressPresentationReady = false;
     }
     if (this.progressPresentationReady) {
       return false;
     }
-    const phase = this.context.gateway.snapshot.phase;
+    // A failed connection or history read is not a progress result. Retry must
+    // still coordinate the first successful conversation presentation.
+    if (!state.connected || getChatHistoryLoadState(state).phase === "failed") {
+      return false;
+    }
     if (
       !this.isCurrentSessionArchived(state) &&
       !parseCatalogSessionKey(state.sessionKey) &&
-      getChatHistoryLoadState(state).phase !== "failed"
+      (!this.presented ||
+        document.visibilityState === "hidden" ||
+        (!this.transcriptReady && !getAcceptedChatHistorySession(state)) ||
+        (this.initialProgressCardTarget() && this.progressCard.loading && !this.progressCard.error))
     ) {
-      if (phase === "connecting" || phase === "starting") {
-        return true;
-      }
-      if (
-        state.connected &&
-        (!this.presented ||
-          document.visibilityState === "hidden" ||
-          (!this.transcriptReady && !getAcceptedChatHistorySession(state)) ||
-          (this.initialProgressCardTarget() &&
-            this.progressCard.loading &&
-            !this.progressCard.error))
-      ) {
-        return true;
-      }
+      return true;
     }
-    // Only the first read reserves an empty card slot; refreshes retain the mounted card.
+    // Present the first transcript with the actual card geometry. Later refreshes
+    // keep both the transcript and the mounted card available.
     this.progressPresentationReady = true;
     return false;
   }

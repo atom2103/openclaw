@@ -135,8 +135,11 @@ chat confirms its current session and conversation branch before delivery
 continues automatically. Switching chats keeps queued messages tied to their
 original conversation. If history fails to load, the queued message stays
 available while you resolve the history error. Goals and other slash commands
-wait for history; `/stop` and `/approve` remain available. The initial task progress
-read reserves only its card slot; the transcript and composer stay available.
+wait for history; `/stop` and `/approve` remain available. The first conversation
+presentation waits for the initial task progress read so the transcript and card
+appear together at their final positions. The composer stays available during
+this wait. Later progress refreshes keep the conversation and existing card visible,
+including when a refresh fails.
 
 When you open a short chat link, identity prepared during the current connection
 can make the composer ready sooner. The original link stays in place until the

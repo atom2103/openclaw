@@ -95,6 +95,8 @@ export type ChatThreadProps = ChatSendStatusActions & {
   announceTranscript?: boolean;
   loading: boolean;
   routeLoadingSkeleton?: boolean;
+  /** The first transcript waits for the progress card's actual layout. */
+  initialProgressPending?: boolean;
   /** Older-history pagination: renders the auto-load sentinel plus the in-flow boundary row. */
   historyPagination?: ChatHistoryBoundaryProps;
   messages: unknown[];

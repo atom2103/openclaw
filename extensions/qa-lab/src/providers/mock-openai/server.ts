@@ -201,6 +201,7 @@ import {
   isSnackRecallPrompt,
   extractSnackPreference,
 } from "./mock-openai-tooling.js";
+import type { QaMockOpenAiServerOptions } from "./server-options.js";
 
 const MOCK_HTTP_POST_ROUTES = new Map([
   ["/v1/images/generations", "OpenAI Images"],
@@ -2637,14 +2638,7 @@ async function buildResponsesPayload(
   return buildAssistantEvents(buildAssistantText(input, body));
 }
 
-export async function startQaMockOpenAiServer(params?: {
-  host?: string;
-  port?: number;
-  finalOnlyMarkerPauseMs?: number;
-  modelRefs?: readonly string[];
-  repeatedRequestResponsePauseMs?: number;
-  repeatedRequestStalledResponsePauseMs?: number;
-}) {
+export async function startQaMockOpenAiServer(params?: QaMockOpenAiServerOptions) {
   const host = params?.host ?? "127.0.0.1";
   const finalOnlyMarkerPauseMs = params?.finalOnlyMarkerPauseMs ?? 1_500;
   const repeatedRequestResponsePauseMs =

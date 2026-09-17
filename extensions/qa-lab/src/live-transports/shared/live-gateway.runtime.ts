@@ -9,6 +9,7 @@ import {
   type QaGatewayChildCommand,
 } from "../../gateway-child.js";
 import type { QaProviderMode } from "../../model-selection.js";
+import type { QaMockOpenAiServerOptions } from "../../providers/mock-openai/server-options.js";
 import { startQaProviderServer } from "../../providers/server-runtime.js";
 import type { QaThinkingLevel } from "../../qa-gateway-config.js";
 import type { RuntimeId } from "../../runtime-parity.js";
@@ -71,10 +72,10 @@ type QaLiveGatewayParams = {
   mockAuthAgentIds?: readonly string[];
   mutateConfig?: (cfg: OpenClawConfig) => OpenClawConfig;
   runtimeEnvPatch?: NodeJS.ProcessEnv;
-  mockProviderOptions?: {
-    repeatedRequestResponsePauseMs?: number;
-    repeatedRequestStalledResponsePauseMs?: number;
-  };
+  mockProviderOptions?: Pick<
+    QaMockOpenAiServerOptions,
+    "repeatedRequestResponsePauseMs" | "repeatedRequestStalledResponsePauseMs"
+  >;
 };
 
 type QaLiveGateway = {

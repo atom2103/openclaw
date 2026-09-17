@@ -1375,6 +1375,8 @@ describe("canonical descendant lifecycle through real owners", () => {
                         "synthetic-app": {
                           enabled: true,
                           destructive_enabled: false,
+                          default_tools_enabled: false,
+                          tools: {},
                           open_world_enabled: true,
                           default_tools_approval_mode: "auto",
                         },

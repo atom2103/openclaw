@@ -1,5 +1,4 @@
 // Codex tests cover plugin thread config plugin behavior.
-import { embeddedAgentLog } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodexAppInventoryCache, defaultCodexAppInventoryCache } from "./app-inventory-cache.js";
 import { codexAppInventoryResponse } from "./app-inventory.test-helpers.js";
@@ -22,6 +21,14 @@ import {
   mergeCodexThreadConfigs,
   shouldBuildCodexPluginThreadConfig,
 } from "./plugin-thread-config.js";
+import {
+  appInfo,
+  appSummary,
+  pluginDetail,
+  pluginInstalled,
+  pluginList,
+  pluginSummary,
+} from "./plugin-thread-config.test-helpers.js";
 import type {
   CodexAppServerRequestParams,
   CodexConfigReadResponse,
@@ -1583,124 +1590,6 @@ describe("Codex plugin thread config", () => {
         expect(config.configPatch?.apps).toHaveProperty("unrelated-slack-app");
       }
       expect(request.mock.calls.map(([method]) => method)).not.toContain("plugin/install");
-    },
-  );
-
-  it.each(
-    [
-      {
-        name: "an enabled plugin is missing",
-        marketplaceName: CODEX_PLUGINS_MARKETPLACE_NAME,
-        diagnosticCode: "plugin_missing",
-      },
-      {
-        name: "an enabled plugin's marketplace is missing",
-        marketplaceName: "missing-marketplace",
-        diagnosticCode: "marketplace_missing",
-      },
-    ].flatMap((scenario) =>
-      ["auto", false, "ask"].flatMap((restriction) =>
-        [[], ["unrelated-display-name"]].map((pluginDisplayNames) => ({
-          ...scenario,
-          restriction,
-          pluginDisplayNames,
-          destructiveEnabled: restriction !== false,
-          approvalMode: restriction === false ? "deny" : restriction,
-        })),
-      ),
-    ),
-  )(
-    "preserves $restriction policy with owner names $pluginDisplayNames when $name",
-    async ({
-      marketplaceName,
-      diagnosticCode,
-      restriction,
-      pluginDisplayNames,
-      destructiveEnabled,
-      approvalMode,
-    }) => {
-      const errorLog = vi.spyOn(embeddedAgentLog, "error").mockImplementation(() => {});
-      try {
-        const request = vi.fn(async (method: string) => {
-          if (method === "app/installed" || method === "app/read") {
-            return codexAppInventoryResponse(method, [
-              appInfo("configured-app", true),
-              { ...appInfo("account-calendar-app", true), pluginDisplayNames },
-            ]);
-          }
-          if (method === "plugin/installed" || method === "plugin/list") {
-            const summaries = [pluginSummary("healthy-plugin", { installed: true, enabled: true })];
-            return method === "plugin/installed"
-              ? pluginInstalled(summaries)
-              : pluginList(summaries);
-          }
-          if (method === "plugin/read") {
-            return pluginDetail("healthy-plugin", [appSummary("configured-app")]);
-          }
-          if (method === "config/read") {
-            return { config: {}, layers: [] };
-          }
-          throw new Error(`unexpected request ${method}`);
-        });
-        const config = await buildCodexPluginThreadConfig({
-          pluginConfig: {
-            codexPlugins: {
-              enabled: true,
-              allow_all_plugins: true,
-              allow_destructive_actions: "auto",
-              plugins: {
-                healthy: {
-                  marketplaceName: CODEX_PLUGINS_MARKETPLACE_NAME,
-                  pluginName: "healthy-plugin",
-                  allow_destructive_actions: "auto",
-                },
-                missing: {
-                  marketplaceName,
-                  pluginName: "missing-plugin",
-                  allow_destructive_actions: restriction,
-                },
-              },
-            },
-          },
-          appCacheKey: "runtime",
-          request,
-        });
-
-        expect(config.configPatch?.apps).toMatchObject({
-          "configured-app": { enabled: true, destructive_enabled: true },
-          "account-calendar-app": {
-            enabled: true,
-            destructive_enabled: destructiveEnabled,
-            ...(restriction === "ask" ? { approvals_reviewer: "user" } : {}),
-          },
-        });
-        expect(config.policyContext.apps).toMatchObject({
-          "configured-app": {
-            configKey: "healthy",
-            allowDestructiveActions: true,
-            destructiveApprovalMode: "auto",
-          },
-          "account-calendar-app": {
-            source: "account",
-            allowDestructiveActions: destructiveEnabled,
-            destructiveApprovalMode: approvalMode,
-          },
-        });
-        expect(config.diagnostics).toEqual([
-          expect.objectContaining({
-            code: diagnosticCode,
-            plugin: expect.objectContaining({ configKey: "missing" }),
-          }),
-        ]);
-        expect(errorLog).toHaveBeenCalledExactlyOnceWith(config.diagnostics[0]?.message, {
-          code: diagnosticCode,
-          configKey: "missing",
-          pluginName: "missing-plugin",
-          marketplaceName,
-        });
-      } finally {
-        errorLog.mockRestore();
-      }
     },
   );
 
@@ -3571,97 +3460,6 @@ describe("Codex plugin thread config", () => {
     ).toBe(true);
   });
 });
-
-function pluginInstalled(
-  plugins: v2.PluginSummary[],
-  marketplace: { name?: string; path?: string | null } = {},
-): v2.PluginInstalledResponse {
-  const { featuredPluginIds: _featuredPluginIds, ...installed } = pluginList(plugins, marketplace);
-  return installed;
-}
-
-function pluginList(
-  plugins: v2.PluginSummary[],
-  marketplace: { name?: string; path?: string | null } = {},
-): v2.PluginListResponse {
-  return {
-    marketplaces: [
-      {
-        name: marketplace.name ?? CODEX_PLUGINS_MARKETPLACE_NAME,
-        path: marketplace.path === undefined ? "/marketplaces/openai-curated" : marketplace.path,
-        interface: null,
-        plugins,
-      },
-    ],
-    marketplaceLoadErrors: [],
-    featuredPluginIds: [],
-  };
-}
-
-function pluginSummary(id: string, overrides: Partial<v2.PluginSummary> = {}): v2.PluginSummary {
-  return {
-    id,
-    name: id,
-    source: { type: "remote" },
-    installed: false,
-    enabled: false,
-    installPolicy: "AVAILABLE",
-    authPolicy: "ON_USE",
-    availability: "AVAILABLE",
-    interface: null,
-    ...overrides,
-  };
-}
-
-function pluginDetail(
-  pluginName: string,
-  apps: v2.AppSummary[],
-  mcpServers: string[] = [],
-  marketplace: { marketplaceName?: string; marketplacePath?: string | null } = {},
-): v2.PluginReadResponse {
-  return {
-    plugin: {
-      marketplaceName: marketplace.marketplaceName ?? CODEX_PLUGINS_MARKETPLACE_NAME,
-      marketplacePath:
-        marketplace.marketplacePath === undefined
-          ? "/marketplaces/openai-curated"
-          : marketplace.marketplacePath,
-      summary: pluginSummary(pluginName, { installed: true, enabled: true }),
-      description: null,
-      skills: [],
-      apps,
-      mcpServers,
-    },
-  };
-}
-
-function appSummary(id: string): v2.AppSummary {
-  return {
-    id,
-    name: id,
-    description: null,
-    installUrl: null,
-    category: null,
-  };
-}
-
-function appInfo(id: string, accessible: boolean, enabled = true): v2.AppInfo {
-  return {
-    id,
-    name: id,
-    description: null,
-    logoUrl: null,
-    logoUrlDark: null,
-    distributionChannel: null,
-    branding: null,
-    appMetadata: null,
-    labels: null,
-    installUrl: null,
-    isAccessible: accessible,
-    isEnabled: enabled,
-    pluginDisplayNames: [],
-  };
-}
 
 async function buildReadyGoogleCalendarThreadConfig(
   pluginConfig: unknown,

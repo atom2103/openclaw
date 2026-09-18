@@ -68,6 +68,7 @@ export function registerPluginServiceRecoveryTests(createRecoveryFixture: Recove
         await expect(fixture.reload()).rejects.toMatchObject({
           details: { committed: false, phase: "drain" },
         });
+        expect(fixture.rollbackConfigEffects).toHaveBeenCalledOnce();
         // Command catalog refresh stops this channel, but its registration is healthy.
         expect(manager.getRuntimeSnapshot().reloadingChannels?.has("sibling")).toBe(false);
         expect(manager.hasCurrentAccountTask("sibling", "default")).toBe(true);
@@ -113,7 +114,9 @@ export function registerPluginServiceRecoveryTests(createRecoveryFixture: Recove
           const record = fixture.registryOwner.registry.plugins.find(
             (plugin) => plugin.id === "first",
           );
-          expect(record && getPluginInstance(record)?.acceptingCalls).toBe(true);
+          if (restoration === "restored") {
+            expect(record && getPluginInstance(record)?.acceptingCalls).toBe(true);
+          }
         });
         const fixture = await createRecoveryFixture({
           prepareConfigEffects: () => rollback,
@@ -131,7 +134,7 @@ export function registerPluginServiceRecoveryTests(createRecoveryFixture: Recove
           expect(rollback).not.toHaveBeenCalled();
           releaseRecovery.resolve();
           expect(await reloading).toMatchObject({ details: { committed: false } });
-          expect(rollback).toHaveBeenCalledTimes(restoration === "restored" ? 1 : 0);
+          expect(rollback).toHaveBeenCalledOnce();
         } finally {
           releaseRecovery.resolve();
           await reloading;

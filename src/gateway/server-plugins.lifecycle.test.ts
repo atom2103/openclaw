@@ -956,6 +956,20 @@ describe("gateway plugin instance bindings", () => {
       const initialRegistry = getActivePluginRegistry();
       const initialMetadata = getGatewayPluginMetadataSnapshot();
       const initialRegistrationCount = coordinator.runtimes.length;
+      const initialGatewayRegistrationCount = coordinator.registrationModes.filter(
+        (mode) => mode === "full",
+      ).length;
+      const expectNoGatewayReplacement = () => {
+        expect(coordinator.registrationModes.filter((mode) => mode === "full")).toHaveLength(
+          initialGatewayRegistrationCount,
+        );
+        // Model-runtime rollback may prepare auxiliary registries without activating a Gateway.
+        expect(
+          coordinator.registrationModes
+            .slice(initialRegistrationCount)
+            .filter((mode) => mode !== "discovery"),
+        ).toEqual([]);
+      };
       expect(initialRegistry).toBeDefined();
       expect(initialMetadata).toBeDefined();
       expect(coordinator.serviceStarts).toBe(1);
@@ -986,7 +1000,7 @@ describe("gateway plugin instance bindings", () => {
       expect(hotReloadRecovery).not.toHaveBeenCalled();
       expect(coordinator.serviceStops).toBe(1);
       expect(coordinator.serviceStarts).toBe(1);
-      expect(coordinator.runtimes).toHaveLength(initialRegistrationCount);
+      expectNoGatewayReplacement();
       expect(getGatewayPluginMetadataSnapshot()).toBe(initialMetadata);
       expect(getActivePluginRegistry()).toBe(initialRegistry);
       await expect(requestInstanceBindingProbe(initialRuntime)).rejects.toThrow(
@@ -1008,7 +1022,10 @@ describe("gateway plugin instance bindings", () => {
         });
         expect(coordinator.serviceStarts).toBe(2);
         const successor = await requireBoundRuntime(
-          coordinator.runtimes.slice(initialRegistrationCount),
+          coordinator.runtimes.filter(
+            (_runtime, index) =>
+              index >= initialRegistrationCount && coordinator.registrationModes[index] === "full",
+          ),
           "replacement after service stop settled",
         );
         const successorProbe = await requestInstanceBindingProbe(successor.runtime);
@@ -1020,7 +1037,7 @@ describe("gateway plugin instance bindings", () => {
       } else {
         expect(retry.ok).toBe(false);
         expect(retry.error?.message).toContain("instance-binding service cleanup rejected");
-        expect(coordinator.runtimes).toHaveLength(initialRegistrationCount);
+        expectNoGatewayReplacement();
         expect(coordinator.serviceStarts).toBe(1);
       }
       await server.close({ reason: "close after plugin cleanup refusal" });

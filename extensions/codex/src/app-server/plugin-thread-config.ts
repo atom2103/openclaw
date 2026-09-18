@@ -16,6 +16,15 @@ import {
   ensureCodexPluginActivation,
   type CodexPluginActivationResult,
 } from "./plugin-activation.js";
+import type {
+  CodexAppPolicyContextEntry,
+  PluginAppPolicyContext,
+} from "./plugin-app-policy-context.js";
+export type {
+  CodexAppPolicyContextEntry,
+  PluginAppPolicyContext,
+  PluginAppPolicyContextEntry,
+} from "./plugin-app-policy-context.js";
 import { buildCodexAppApprovalOverrides } from "./plugin-app-approval-overrides.js";
 import {
   readCodexPluginInventory,
@@ -50,40 +59,6 @@ import {
   type CodexPluginThreadAppAdmissionDiagnostic,
 } from "./plugin-thread-app-admission.js";
 import { isJsonObject, type JsonObject, type JsonValue } from "./protocol.js";
-
-/** Policy context for one app id exposed by a configured Codex plugin. */
-export type PluginAppPolicyContextEntry = {
-  source?: "plugin";
-  configKey: string;
-  marketplaceName: ResolvedCodexPluginPolicy["marketplaceName"];
-  pluginName: string;
-  allowDestructiveActions: boolean;
-  nativeToolMetadataFallback?: true;
-  allowOpenWorld?: boolean;
-  destructiveApprovalMode?: CodexPluginDestructiveApprovalMode;
-  mcpServerNames: string[];
-};
-
-/** Policy context for one account-connected app admitted without a plugin package. */
-type AccountAppPolicyContextEntry = {
-  source: "account";
-  appName: string;
-  allowDestructiveActions: boolean;
-  nativeToolMetadataFallback?: true;
-  allowOpenWorld?: boolean;
-  destructiveApprovalMode?: CodexPluginDestructiveApprovalMode;
-  mcpServerNames: string[];
-};
-
-/** Policy context for any app exposed to a native Codex thread. */
-export type CodexAppPolicyContextEntry = PluginAppPolicyContextEntry | AccountAppPolicyContextEntry;
-
-/** Stable app-to-plugin ownership context persisted with Codex thread bindings. */
-export type PluginAppPolicyContext = {
-  fingerprint: string;
-  apps: Record<string, CodexAppPolicyContextEntry>;
-  pluginAppIds: Record<string, string[]>;
-};
 
 /** Diagnostic emitted while building app config for a native Codex thread. */
 type CodexPluginThreadConfigDiagnostic =

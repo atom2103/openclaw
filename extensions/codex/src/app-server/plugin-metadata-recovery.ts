@@ -1,6 +1,6 @@
 import { CodexAppInventoryCache } from "./app-inventory-cache.js";
+import type { PluginAppPolicyContext } from "./plugin-app-policy-context.js";
 import type { CodexPluginRuntimeRequest } from "./plugin-inventory.js";
-import type { PluginAppPolicyContext } from "./plugin-thread-config.js";
 import { isJsonObject, type JsonObject } from "./protocol.js";
 
 /** Recheck only restrictions installed by our own missing-metadata fallback. */

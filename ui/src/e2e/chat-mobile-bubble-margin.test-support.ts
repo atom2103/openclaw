@@ -96,7 +96,7 @@ export const marginCases = [
       messages: [message(role, content)],
       side: role === "user" ? "right" : "left",
       selector,
-      ...(id === "assistant-image" ? { imageSize: { width: 960, height: 540 } } : {}),
+      imageSize: id === "assistant-image" ? { width: 960, height: 540 } : undefined,
     })),
   ),
   ...[

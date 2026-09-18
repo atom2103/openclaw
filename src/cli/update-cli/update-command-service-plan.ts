@@ -614,7 +614,9 @@ export async function resolveManagedServicePackageUpdatePlan(params: {
       return {
         rootRedirect: null,
         serviceRoot: layout.packageRootReal,
-        installationDrift: drift ? formatGatewayServiceInstallationDrift(drift) : undefined,
+        installationDrift: drift
+          ? formatGatewayServiceInstallationDrift(drift, undefined, state?.env)
+          : undefined,
       };
     }
     return {

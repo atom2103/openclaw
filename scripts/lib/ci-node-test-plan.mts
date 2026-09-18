@@ -150,6 +150,10 @@ const policyTestWatches = [
     watchGlobs: ["test/scripts/**/*.test.ts"],
   },
   {
+    testFile: "test/vitest-projects-config.test.ts",
+    watchGlobs: ["extensions/codex/src/app-server/**/*.test.ts"],
+  },
+  {
     testFile: "test/scripts/pr-worktree-provision.test.ts",
     ownerGlobs: ["scripts/pr-lib/wrapper-components.txt"],
     watchGlobs: [

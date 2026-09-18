@@ -666,12 +666,26 @@ describe("CI changed Node test plan", () => {
     expect(targets).toEqual(expected);
   });
 
-  it("selects the workflow routing guard alongside an added tooling test", () => {
-    const recovery = "test/scripts/openclaw-npm-plugin-recovery-workflow.test.ts";
-    const shards = createChangedNodeTestShards([recovery]);
+  it.each([
+    {
+      source: "test/scripts/openclaw-npm-plugin-recovery-workflow.test.ts",
+      targets: [
+        "test/scripts/openclaw-npm-plugin-recovery-workflow.test.ts",
+        "test/scripts/test-projects.test.ts",
+      ],
+    },
+    ...[
+      "extensions/codex/src/app-server/run-attempt.native-config.test.ts",
+      "extensions/codex/src/app-server/run-attempt.subscription.test.ts",
+    ].map((source) => ({
+      source,
+      targets: expect.arrayContaining([source, "test/vitest-projects-config.test.ts"]),
+    })),
+  ])("selects inventory guards alongside $source", ({ source, targets: expected }) => {
+    const shards = createChangedNodeTestShards([source]);
     expect(shards).not.toBeNull();
     const targets = fallbackGroups(shards ?? []).flatMap((group) => group.includePatterns ?? []);
-    expect(targets.toSorted()).toEqual([recovery, "test/scripts/test-projects.test.ts"].toSorted());
+    expect(targets.toSorted()).toEqual(expected);
   });
 
   it("routes cron alert sanitization changes through alert policy suites", () => {

@@ -537,7 +537,8 @@ it.each(["cancel", "deadline", "disk-full", "cooperative-cancel"] as const)(
         destination: string;
       };
       const scratch = path.dirname(path.dirname(child.destination));
-      expect(path.dirname(scratch)).toBe(root);
+      // SQLite can publish an extended-length Windows path for the same scratch parent.
+      expect(path.toNamespacedPath(path.dirname(scratch))).toBe(path.toNamespacedPath(root));
       expect(path.basename(scratch)).toMatch(/^openclaw-update-canary-/);
       if (failure === "cancel" || failure === "cooperative-cancel") {
         controller.abort(new Error("cancel rehearsal proof"));

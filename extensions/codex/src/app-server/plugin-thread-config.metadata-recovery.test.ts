@@ -91,6 +91,7 @@ describe("warm native tool metadata recovery", () => {
       enabled: true,
       destructive_enabled: false,
       open_world_enabled: true,
+      default_tools_approval_mode: "auto",
       tools: { "drive.create": { enabled: false } },
     });
     expect(fixture.state.saved).toEqual({
@@ -122,7 +123,7 @@ function recoveryFixture() {
       const params = input as CodexAppServerRequestParams<"app/read">;
       return codexAppInventoryResponse(
         method,
-        [appInfo("drive", state.accessible, state.globalEnabled)],
+        [appInfo("drive", state.accessible, params?.threadId ? true : state.globalEnabled)],
         params,
         { callableByAppId: { drive: params?.threadId ? false : state.globalCallable } },
       );

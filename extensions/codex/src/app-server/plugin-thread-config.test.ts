@@ -1274,32 +1274,27 @@ describe("Codex plugin thread config", () => {
         },
       },
     });
-    expect(config.policyContext.apps).toEqual({
-      "chatgpt-meetings": {
-        source: "account",
-        appName: "ChatGPT Meetings",
-        allowDestructiveActions: false,
-        allowOpenWorld: true,
-        destructiveApprovalMode: "deny",
-        mcpServerNames: [],
-      },
-      "disabled-account-app": {
-        source: "account",
-        appName: "disabled-account-app",
-        allowDestructiveActions: false,
-        allowOpenWorld: true,
-        destructiveApprovalMode: "deny",
-        mcpServerNames: [],
-      },
-      slack: {
-        source: "account",
-        appName: "Slack",
-        allowDestructiveActions: false,
-        allowOpenWorld: true,
-        destructiveApprovalMode: "deny",
-        mcpServerNames: [],
-      },
-    });
+    expect(config.policyContext.apps).toEqual(
+      Object.fromEntries(
+        [
+          ["chatgpt-meetings", "ChatGPT Meetings"],
+          ["disabled-account-app", "disabled-account-app"],
+          ["slack", "Slack"],
+        ].map(([id, appName]) => [
+          id,
+          {
+            source: "account",
+            appName,
+            allowDestructiveActions: false,
+            nativeToolMetadataFallback: true,
+            allowOpenWorld: true,
+            destructiveApprovalMode: "deny",
+            mcpServerNames: [],
+          },
+        ]),
+      ),
+    );
+
     expect(config.provisionalAppIds).toEqual(["chatgpt-meetings", "disabled-account-app", "slack"]);
     expect(config.diagnostics).toStrictEqual([]);
   });

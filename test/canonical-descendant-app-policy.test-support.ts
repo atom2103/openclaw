@@ -64,8 +64,12 @@ export function expectOverlay(config: unknown, context: unknown) {
 }
 
 export function expectedFallbackContext(appPolicy: string) {
-  if (appPolicy === "unconfigured") return undefined;
-  if (appPolicy !== "enabled") return {};
+  if (appPolicy === "unconfigured") {
+    return undefined;
+  }
+  if (appPolicy !== "enabled") {
+    return {};
+  }
   return {
     "synthetic-app": {
       source: "account",

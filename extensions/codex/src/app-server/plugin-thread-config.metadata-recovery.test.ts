@@ -17,10 +17,7 @@ describe("warm native tool metadata recovery", () => {
       },
     });
     expect(fallback.policyContext.apps.drive).toMatchObject({ nativeToolMetadataFallback: true });
-    const persisted = readPluginAppPolicyContext(
-      JSON.parse(JSON.stringify(fallback.policyContext)),
-      2,
-    );
+    const persisted = readPluginAppPolicyContext(structuredClone(fallback.policyContext), 2);
     expect(persisted).toEqual(fallback.policyContext);
     fixture.state.metadataReady = true;
     const recovered = await fixture.build({ threadId: "loaded", previousPolicyContext: persisted });
@@ -61,11 +58,21 @@ describe("warm native tool metadata recovery", () => {
     const fixture = recoveryFixture();
     const fallback = await fixture.build();
     fixture.state.metadataReady = true;
-    if (denial === "global-disabled") fixture.state.globalEnabled = false;
-    if (denial === "global-uncallable") fixture.state.globalCallable = false;
-    if (denial === "native-denied") fixture.state.saved = { enabled: false };
-    if (denial === "inaccessible") fixture.state.accessible = false;
-    if (denial === "allowlist") fixture.state.allowAll = false;
+    if (denial === "global-disabled") {
+      fixture.state.globalEnabled = false;
+    }
+    if (denial === "global-uncallable") {
+      fixture.state.globalCallable = false;
+    }
+    if (denial === "native-denied") {
+      fixture.state.saved = { enabled: false };
+    }
+    if (denial === "inaccessible") {
+      fixture.state.accessible = false;
+    }
+    if (denial === "allowlist") {
+      fixture.state.allowAll = false;
+    }
     const result = await fixture.build({
       threadId: "loaded",
       previousPolicyContext: denial === "unmarked" ? undefined : fallback.policyContext,
@@ -117,8 +124,12 @@ function recoveryFixture() {
     } as Record<string, unknown>,
   };
   const request = vi.fn(async (method: string, input?: unknown) => {
-    if (method === "plugin/installed") return pluginInstalled([]);
-    if (method === "plugin/list") return pluginList([]);
+    if (method === "plugin/installed") {
+      return pluginInstalled([]);
+    }
+    if (method === "plugin/list") {
+      return pluginList([]);
+    }
     if (method === "app/installed" || method === "app/read") {
       const params = input as CodexAppServerRequestParams<"app/read">;
       return codexAppInventoryResponse(
@@ -128,13 +139,16 @@ function recoveryFixture() {
         { callableByAppId: { drive: params?.threadId ? false : state.globalCallable } },
       );
     }
-    if (method === "config/read")
+    if (method === "config/read") {
       return {
         config: { apps: { drive: state.saved } },
         layers: [{ name: { type: "user" }, config: { apps: { drive: state.saved } } }],
       };
+    }
     if (method === "mcpServerStatus/list") {
-      if (!state.metadataReady) throw new Error("native metadata temporarily unavailable");
+      if (!state.metadataReady) {
+        throw new Error("native metadata temporarily unavailable");
+      }
       return {
         data: [
           {

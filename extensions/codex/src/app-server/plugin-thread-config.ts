@@ -16,24 +16,17 @@ import {
   ensureCodexPluginActivation,
   type CodexPluginActivationResult,
 } from "./plugin-activation.js";
+import { buildCodexAppApprovalOverrides } from "./plugin-app-approval-overrides.js";
 import type {
   CodexAppPolicyContextEntry,
   PluginAppPolicyContext,
 } from "./plugin-app-policy-context.js";
-export type {
-  CodexAppPolicyContextEntry,
-  PluginAppPolicyContext,
-  PluginAppPolicyContextEntry,
-} from "./plugin-app-policy-context.js";
-import { buildCodexAppApprovalOverrides } from "./plugin-app-approval-overrides.js";
 import {
   readCodexPluginInventory,
   type CodexPluginInventory,
   type CodexPluginInventoryDiagnostic,
   type CodexPluginRuntimeRequest,
 } from "./plugin-inventory.js";
-import { fingerprintCodexPluginPolicy } from "./plugin-policy-fingerprint.js";
-export { stringifyCodexPluginPolicy } from "./plugin-policy-fingerprint.js";
 import type { CodexPluginMetadataCache } from "./plugin-metadata-cache.js";
 import {
   nativeMetadataFallbackContext,
@@ -43,6 +36,7 @@ import {
   readCodexNativeAppToolKeys,
   withCodexNativeAppToolKeys,
 } from "./plugin-native-tool-keys.js";
+import { fingerprintCodexPluginPolicy } from "./plugin-policy-fingerprint.js";
 import {
   collectCodexPluginOwnedAppIds,
   collectCodexReservedPluginAppIds,
@@ -59,6 +53,13 @@ import {
   type CodexPluginThreadAppAdmissionDiagnostic,
 } from "./plugin-thread-app-admission.js";
 import { isJsonObject, type JsonObject, type JsonValue } from "./protocol.js";
+
+export type {
+  CodexAppPolicyContextEntry,
+  PluginAppPolicyContext,
+  PluginAppPolicyContextEntry,
+} from "./plugin-app-policy-context.js";
+export { stringifyCodexPluginPolicy } from "./plugin-policy-fingerprint.js";
 
 /** Diagnostic emitted while building app config for a native Codex thread. */
 type CodexPluginThreadConfigDiagnostic =

@@ -57,17 +57,18 @@ export function withCodexMetadataRecovery<
           : [],
       ),
     );
-    return {
-      ...scoped,
-      apps: scoped.apps.map((app) =>
+    const apps = scoped.apps.slice();
+    for (const [index, app] of apps.entries()) {
+      if (
         candidates.includes(app) &&
         isJsonObject(app) &&
         typeof app.id === "string" &&
         ready.has(app.id)
-          ? { ...app, callable: true }
-          : app,
-      ),
-    };
+      ) {
+        apps[index] = { ...app, callable: true };
+      }
+    }
+    return { ...scoped, apps };
   };
   // Avoid reusing the thread's cached fallback inventory. This only permits a
   // policy rebuild: current authorization, native tool restrictions and fresh

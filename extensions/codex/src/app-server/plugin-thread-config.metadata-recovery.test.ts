@@ -29,7 +29,8 @@ describe("warm native tool metadata recovery", () => {
         tools: { "drive.create": { enabled: false } },
       },
     });
-    expect(recovered.policyContext.apps.drive.nativeToolMetadataFallback).toBeUndefined();
+    expect(recovered.policyContext.apps.drive).toBeDefined();
+    expect(recovered.policyContext.apps.drive?.nativeToolMetadataFallback).toBeUndefined();
     expect(recovered.configPatch).not.toHaveProperty(["apps", "drive", "default_tools_enabled"]);
     expect(recovered.configPatch).not.toHaveProperty(["apps", "drive", "tools", "drive.fetch"]);
     expect(recovered.fingerprint).not.toBe(fallback.fingerprint);

@@ -38,13 +38,12 @@ import {
   loadPersistedAuthProfileStoreFromRows,
   prepareAgentAuthProfileRowsRead,
   readSharedAuthProfileRows,
-  type AuthProfileRowRead,
 } from "./sqlite-read.js";
 import {
   resolveAuthProfileDatabasePath as resolveAgentAuthPath,
   type AuthProfileDatabase,
 } from "./sqlite.js";
-import type { AuthProfileStore } from "./types.js";
+import type { AuthProfileStore, AuthProfileRowRead } from "./types.js";
 
 export type LoadAuthProfileStoreOptions = {
   /** Limit a credential-read refusal to the provider being resolved; writes stay owner-wide. */

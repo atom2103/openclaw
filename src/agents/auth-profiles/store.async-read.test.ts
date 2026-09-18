@@ -11,7 +11,7 @@ import * as migration from "./legacy-source-diagnostic.js";
 import * as sqliteRead from "./sqlite-read.js";
 import { AuthProfileStoreUnreadableError } from "./store-unreadable-error.js";
 import { createAuthProfileStoreRuntime } from "./store.js";
-import type { AuthProfileStore } from "./types.js";
+import type { AuthProfileStore, AuthProfileRowRead } from "./types.js";
 
 const reader = vi.hoisted(() => ({ read: vi.fn(), assertCurrent: vi.fn() }));
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
@@ -40,7 +40,7 @@ it.each([false, true])(
         : {},
     };
     const inheritedReadStarted = createDeferredCore();
-    const inheritedRows = createDeferredCore<sqliteRead.AuthProfileRowRead>();
+    const inheritedRows = createDeferredCore<AuthProfileRowRead>();
     reader.assertCurrent.mockReset();
     reader.read.mockReset();
     reader.read.mockResolvedValueOnce({
@@ -55,7 +55,7 @@ it.each([false, true])(
       listRuntimeExternalAuthProfiles: () => [],
       overlayExternalAuthProfiles: (store) => store,
     });
-    const inherited: sqliteRead.AuthProfileRowRead = {
+    const inherited: AuthProfileRowRead = {
       store: {
         status: "readable",
         raw: {

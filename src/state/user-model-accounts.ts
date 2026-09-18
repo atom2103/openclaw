@@ -5,7 +5,7 @@ import { truncateUtf16Safe } from "@openclaw/normalization-core/utf16-slice";
 import { z } from "zod";
 import { inlineAuthProfileCredentialSchema } from "../agents/auth-profiles/credential-schema.js";
 import { coerceProfileUsageStats } from "../agents/auth-profiles/profile-usage-stats.js";
-import type { AuthProfileCredential, ProfileUsageStats } from "../agents/auth-profiles/types.js";
+import type { AuthProfileCredential, UserModelAuthProfile } from "../agents/auth-profiles/types.js";
 import {
   executeSqliteQuerySync,
   executeSqliteQueryTakeFirstSync,
@@ -47,11 +47,6 @@ const profileSchema = z.strictObject({
 });
 type UserModelLinks = z.infer<typeof linksSchema>;
 type AccountRecordName = "model-accounts" | `model-account:${string}`;
-
-export type UserModelAuthProfile = {
-  credential: AuthProfileCredential;
-  usageStats?: ProfileUsageStats;
-};
 
 export type UserProfileAuthLink = { provider: string; authProfileId: string; updatedAt: number };
 export type UserModelAccount = {

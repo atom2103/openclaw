@@ -12,18 +12,12 @@ import { isArtifactPreservingStateRead } from "../../state/openclaw-state-db-rea
 import type { OpenClawStateWorkerContext } from "../../state/openclaw-state-worker-context.types.js";
 import { runOpenClawStateWorkerOperation } from "../../state/openclaw-state-worker-store.js";
 import { mergePersistedAuthProfileState } from "./persisted.js";
-import type { PersistedAuthProfileStoreInspection } from "./sqlite.js";
 import { AuthProfileStoreUnreadableError } from "./store-unreadable-error.js";
-import type { AuthProfileStore } from "./types.js";
-
-export type AuthProfileRowRead = {
-  store: PersistedAuthProfileStoreInspection;
-  state: PersistedAuthProfileStoreInspection;
-};
-
-export type AuthProfileReadWorkerOperations = {
-  read: { input: undefined; output: AuthProfileRowRead };
-};
+import type {
+  AuthProfileStore,
+  AuthProfileRowRead,
+  AuthProfileReadWorkerOperations,
+} from "./types.js";
 
 /** Decode worker-read facts with the same store/state coercion as synchronous reads. */
 export function loadPersistedAuthProfileStoreFromRows(

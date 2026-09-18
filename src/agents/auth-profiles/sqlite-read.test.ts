@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SqliteWorkerError } from "../../infra/sqlite-worker-contract.js";
-import { prepareAgentAuthProfileRowsRead, type AuthProfileRowRead } from "./sqlite-read.js";
+import { prepareAgentAuthProfileRowsRead } from "./sqlite-read.js";
+import type { AuthProfileRowRead } from "./types.js";
 
 const worker = vi.hoisted(() => ({ execute: vi.fn(), close: vi.fn() }));
 const identity = vi.hoisted(() => vi.fn());

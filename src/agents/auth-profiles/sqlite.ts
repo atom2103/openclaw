@@ -50,7 +50,10 @@ import {
   closeAuthProfileReadPool,
   isMissingDatabasePath,
 } from "./sqlite-read-pool.js";
-import type { AuthProfileReadWorkerOperations } from "./sqlite-read.js";
+import type {
+  AuthProfileReadWorkerOperations,
+  PersistedAuthProfileStoreInspection,
+} from "./types.js";
 
 export { closeAuthProfileReadPool };
 
@@ -211,11 +214,6 @@ function parseJsonCell(raw: string | null | undefined): unknown {
   }
   return safeParseJson(raw) ?? null;
 }
-
-export type PersistedAuthProfileStoreInspection =
-  | { status: "missing"; reason: "database" | "table" | "row" }
-  | { status: "readable"; raw: unknown }
-  | { status: "unreadable" };
 
 function getAgentAuthProfileKysely(db: DatabaseSync) {
   return getNodeSqliteKysely<AgentAuthProfileDatabase>(db);

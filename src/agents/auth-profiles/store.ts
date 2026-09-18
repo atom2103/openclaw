@@ -107,7 +107,7 @@ import {
   setRuntimeAuthProfileStoreSnapshotAtDatabasePath,
   type OwnedRuntimeAuthProfileStoreSnapshotEntry,
 } from "./runtime-snapshots.js";
-import { loadPersistedAuthProfileStoreFromRows, type AuthProfileRowRead } from "./sqlite-read.js";
+import { loadPersistedAuthProfileStoreFromRows } from "./sqlite-read.js";
 import {
   deletePersistedAuthProfileStoreRaw,
   inspectPersistedAuthProfileStoreRaw,
@@ -1467,7 +1467,7 @@ export function createAuthProfileStoreRuntime(
     agentDir?: string,
     options?: LoadAuthProfileStoreOptions,
     env?: NodeJS.ProcessEnv,
-    preparedRows?: AuthProfileRowRead,
+    preparedRows?: Parameters<typeof loadPersistedAuthProfileStoreFromRows>[0],
   ): AuthProfileStore {
     if (isEnvOnlyAuthProfileRuntime()) {
       return createEmptyAuthProfileStore();

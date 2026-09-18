@@ -1,4 +1,4 @@
-import type { AuthProfileRowRead } from "../agents/auth-profiles/sqlite-read.js";
+import type { AuthProfileRowRead, UserModelAuthProfile } from "../agents/auth-profiles/types.js";
 import type { NativeHookRelayStoreWorkerOperations } from "../agents/harness/native-hook-relay-store.worker-contract.js";
 import type { ClawInstallSchemaVersionRow } from "../claws/provenance-runtime-read.kernel.js";
 import type { readSqliteDatabaseBloat } from "../commands/doctor-db-bloat.read.js";
@@ -35,7 +35,6 @@ import type { TaskRegistryWorkerOperations } from "../tasks/task-registry.worker
 import type { AgentProvenance } from "./agent-provenance.types.js";
 import type { PreparedBackupRunRecord } from "./backup-run-records.kernel.js";
 import type { OpenClawStateLeaseIdentity } from "./openclaw-state-lease-store.js";
-import type { UserModelAuthProfile } from "./user-model-accounts.js";
 import type { UserPreferenceWorkerOperations } from "./user-preferences.types.js";
 
 /** Commands share one physical shared-state actor; bindings belong to commands, not open input. */

@@ -1,10 +1,9 @@
 import {
   readUserModelAuthProfile,
   updateUserModelAuthProfile,
-  type UserModelAuthProfile,
 } from "../../state/user-model-accounts.js";
 import { AUTH_STORE_VERSION } from "./constants.js";
-import type { AuthProfileStore } from "./types.js";
+import type { AuthProfileStore, UserModelAuthProfile } from "./types.js";
 
 /** Personal credentials enter only the selected turn's view, never the shared profile pool. */
 export function materializePersonalAuthProfile(

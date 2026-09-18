@@ -126,7 +126,11 @@ export function prepareAgentAuthProfileRowsRead(options: {
     }
   };
   const cleanSnapshot = async (snapshot: PreparedSqliteReadOnlyLocation) => {
-    await snapshot.cleanupAsync();
+    if (!(await snapshot.cleanupAsync())) {
+      throw new Error(
+        `SQLite read-only worker snapshot cleanup failed: ${snapshot.cleanupRoot ?? path.dirname(snapshot.location)}`,
+      );
+    }
     snapshots.delete(snapshot);
   };
   const dispose = (): Promise<void> => {

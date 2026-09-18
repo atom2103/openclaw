@@ -329,13 +329,25 @@ describe("Scheduled Task stop/restart cleanup", () => {
           });
         }
         spawnSync.mockImplementation((command, args) => {
-          if (command.toLowerCase().endsWith("taskkill.exe")) {
+          const executable = command.toLowerCase();
+          if (executable.endsWith("taskkill.exe")) {
             changed = true;
             killed = args?.includes("/F") ?? false;
             return {
               pid: 0,
               output: [null, "", ""],
               stdout: "",
+              stderr: "",
+              status: 0,
+              signal: null,
+            };
+          }
+          if (executable.endsWith("tasklist.exe")) {
+            const output = killed ? "No tasks" : '"node.exe","4242","Console","1","1 K"';
+            return {
+              pid: 0,
+              output: [null, output, ""],
+              stdout: output,
               stderr: "",
               status: 0,
               signal: null,
@@ -388,13 +400,26 @@ describe("Scheduled Task stop/restart cleanup", () => {
           });
         }
         spawnSync.mockImplementation((command, args) => {
-          if (command.toLowerCase().endsWith("taskkill.exe")) {
+          const executable = command.toLowerCase();
+          if (executable.endsWith("taskkill.exe")) {
             unknown = true;
             forced = args?.includes("/F") ?? false;
             return {
               pid: 0,
               output: [null, "", ""],
               stdout: "",
+              stderr: "",
+              status: 0,
+              signal: null,
+            };
+          }
+          if (executable.endsWith("tasklist.exe")) {
+            const alive = phase === "before forced stop" && !forced;
+            const output = alive ? '"node.exe","4242","Console","1","1 K"' : "No tasks";
+            return {
+              pid: 0,
+              output: [null, output, ""],
+              stdout: output,
               stderr: "",
               status: 0,
               signal: null,
@@ -477,13 +502,25 @@ describe("Scheduled Task stop/restart cleanup", () => {
           });
         }
         spawnSync.mockImplementation((command, args) => {
-          if (command.toLowerCase().endsWith("taskkill.exe")) {
+          const executable = command.toLowerCase();
+          if (executable.endsWith("taskkill.exe")) {
             dead = true;
             forced = args?.includes("/F") ?? false;
             return {
               pid: 0,
               output: [null, "", ""],
               stdout: "",
+              stderr: "",
+              status: 0,
+              signal: null,
+            };
+          }
+          if (executable.endsWith("tasklist.exe")) {
+            const output = forced ? "No tasks" : '"node.exe","4242","Console","1","1 K"';
+            return {
+              pid: 0,
+              output: [null, output, ""],
+              stdout: output,
               stderr: "",
               status: 0,
               signal: null,
@@ -539,6 +576,64 @@ describe("Scheduled Task stop/restart cleanup", () => {
     });
   });
 
+  it("does not force a gracefully removed owner when the CIM snapshot is stale", async () => {
+    await withPreparedGatewayTask(async ({ env }) => {
+      vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+      inspectPortUsageMock.mockResolvedValue(freePortUsage());
+      let removed = false;
+      spawnSync.mockImplementation((command) => {
+        const executable = command.toLowerCase();
+        if (executable.endsWith("taskkill.exe")) {
+          removed = true;
+          return {
+            pid: 0,
+            output: [null, "", ""],
+            stdout: "",
+            stderr: "",
+            status: 0,
+            signal: null,
+          };
+        }
+        if (executable.endsWith("tasklist.exe")) {
+          const output = removed ? "No tasks" : '"node.exe","4242","Console","1","1 K"';
+          return {
+            pid: 0,
+            output: [null, output, ""],
+            stdout: output,
+            stderr: "",
+            status: 0,
+            signal: null,
+          };
+        }
+        // Model the lagging CIM result from the packaged Windows failure.
+        const output = JSON.stringify([
+          { ProcessId: 4242, CommandLine: INSTALLED_GATEWAY_COMMAND_LINE },
+          { ProcessId: 9999, CommandLine: "powershell.exe" },
+        ]);
+        return {
+          pid: 0,
+          output: [null, output, ""],
+          stdout: output,
+          stderr: "",
+          status: 0,
+          signal: null,
+        };
+      });
+
+      await expect(terminateScheduledTaskGatewayListeners(env)).resolves.toEqual([4242]);
+
+      const taskkillCalls = spawnSync.mock.calls
+        .filter(([command]) => command.toLowerCase().endsWith("taskkill.exe"))
+        .map(([, args]) => args);
+      expect(taskkillCalls).toEqual([["/T", "/PID", "4242"]]);
+      expect(spawnSync.mock.calls).toContainEqual([
+        expect.stringMatching(/tasklist\.exe$/i),
+        ["/FI", "PID eq 4242", "/FO", "CSV", "/NH"],
+        expect.objectContaining({ timeout: 1_500 }),
+      ]);
+    });
+  });
+
   it.each(["gateway", "task-supervisor", "gateway-with-supervisor"])(
     "stops the exact installed Windows %s even before its port is bound",
     async (owner) => {
@@ -571,6 +666,17 @@ describe("Scheduled Task stop/restart cleanup", () => {
               stdout: "",
               stderr: "",
               status: 1,
+              signal: null,
+            };
+          }
+          if (executable.endsWith("tasklist.exe")) {
+            const output = forced ? "No tasks" : '"node.exe","4242","Console","1","1 K"';
+            return {
+              pid: 0,
+              output: [null, output, ""],
+              stdout: output,
+              stderr: "",
+              status: 0,
               signal: null,
             };
           }

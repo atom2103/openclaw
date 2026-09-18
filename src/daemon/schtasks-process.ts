@@ -551,8 +551,15 @@ export async function terminateGatewayProcessTree(
     timeout: 5_000,
     windowsHide: true,
   });
-  // taskkill can race with exit; only a missing PID avoids forcing the verified owner.
-  if (await waitForProcessExit(pid, graceful.status === 0 && !graceful.error ? graceMs : 0)) {
+  // Full CIM snapshots can lag either taskkill. Probe this PID directly so an
+  // already-removed owner never reaches the forced-termination authority check.
+  if (
+    await waitForProcessExit(
+      pid,
+      graceful.status === 0 && !graceful.error ? graceMs : 0,
+      probeWindowsTasklistProcessState,
+    )
+  ) {
     return;
   }
   assertGatewayServiceUpdateCurrent();
@@ -569,7 +576,7 @@ export async function terminateGatewayProcessTree(
     }
     throw new Error(`taskkill could not terminate gateway process ${pid}`);
   }
-  // CIM snapshots can lag a successful forced termination. Verify the PID directly here.
+  // Verify the forced result through the same direct PID boundary.
   if (
     !(await waitForProcessExit(pid, 5_000, probeWindowsTasklistProcessState)) &&
     probeWindowsTasklistProcessState(pid) === "alive"

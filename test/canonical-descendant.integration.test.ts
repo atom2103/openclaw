@@ -1394,20 +1394,7 @@ describe("canonical descendant lifecycle through real owners", () => {
             expect(Boolean(binding.pluginAppsFingerprint)).toBe(appPolicy !== "unconfigured");
             expect(Boolean(binding.pluginAppsInputFingerprint)).toBe(appPolicy !== "unconfigured");
             expect(binding.pluginAppPolicyContext?.apps).toEqual(
-              appPolicy === "unconfigured"
-                ? undefined
-                : appPolicy !== "enabled"
-                  ? {}
-                  : {
-                      "synthetic-app": {
-                        source: "account",
-                        appName: "Synthetic App",
-                        allowDestructiveActions: false,
-                        allowOpenWorld: true,
-                        destructiveApprovalMode: "deny",
-                        mcpServerNames: [],
-                      },
-                    },
+              nativeAppPolicy.expectedFallbackContext(appPolicy),
             );
           }
           for (const reason of ["closed", "aborted", "replaced"] as const) {

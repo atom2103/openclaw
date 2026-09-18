@@ -62,3 +62,19 @@ export function expectOverlay(config: unknown, context: unknown) {
     },
   });
 }
+
+export function expectedFallbackContext(appPolicy: string) {
+  if (appPolicy === "unconfigured") return undefined;
+  if (appPolicy !== "enabled") return {};
+  return {
+    "synthetic-app": {
+      source: "account",
+      appName: "Synthetic App",
+      allowDestructiveActions: false,
+      nativeToolMetadataFallback: true,
+      allowOpenWorld: true,
+      destructiveApprovalMode: "deny",
+      mcpServerNames: [],
+    },
+  };
+}

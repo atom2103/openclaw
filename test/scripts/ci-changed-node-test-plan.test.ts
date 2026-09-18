@@ -654,6 +654,10 @@ describe("CI changed Node test plan", () => {
       source: "extensions/anthropic/openclaw.plugin.json",
       targets: ["src/agents/model-ref-shared.test.ts"],
     },
+    {
+      source: "src/test-utils/symlink-rebind-race.ts",
+      targets: expect.arrayContaining(["src/infra/fs-safe-import-boundary.test.ts"]),
+    },
   ])("routes $source through source-scanning policy tests", ({ source, targets: expected }) => {
     const shards = createChangedNodeTestShards([source]);
     const targets = shards?.flatMap((shard) => shard.targets ?? []) ?? [];

@@ -1864,7 +1864,7 @@ describe("OpenResponses HTTP API (e2e)", () => {
       });
 
       const response = await stream.finalResponse();
-      expect(deltas.join("")).toBe("start finish!");
+      expect(deltas.join("")).toBe(heldTools ? "!start finish!" : "start finish!");
       expect(response.status).toBe("completed");
       expect(response.output_text).toBe("start finish!");
       expect(response.output.map((item) => item.type)).toEqual(
@@ -3232,7 +3232,7 @@ describe("OpenResponses HTTP API (e2e)", () => {
       expected: "coordination draft",
     },
   ])(
-    "buffers replaceable assistant events through $name",
+    "forwards replaceable assistant events through $name",
     async ({ replacement, finalText, expected }) => {
       agentCommandMock.mockClear();
       agentCommandMock.mockImplementationOnce((async (opts: unknown) => {
@@ -3269,14 +3269,14 @@ describe("OpenResponses HTTP API (e2e)", () => {
 
       const response = await stream.finalResponse();
       expect({ deltas: deltas.join(""), outputText: response.output_text }).toEqual({
-        deltas: expected,
+        deltas: `coordination draft${expected}`,
         outputText: expected,
       });
       expect(response.status).toBe("completed");
     },
   );
 
-  it("prefers final result text over buffered replaceable response drafts", async () => {
+  it("streams replaceable commentary before preserving the final response text", async () => {
     const port = enabledPort;
     agentCommandMock.mockClear();
     agentCommandMock.mockImplementationOnce((async (opts: unknown) => {
@@ -3285,6 +3285,15 @@ describe("OpenResponses HTTP API (e2e)", () => {
         runId,
         stream: "assistant",
         data: { text: "coordination draft", delta: "coordination draft", replaceable: true },
+      });
+      emitAgentEvent({
+        runId,
+        stream: "assistant",
+        data: {
+          text: "coordination draft updated",
+          delta: "coordination draft updated",
+          replaceable: true,
+        },
       });
       emitAgentEvent({ runId, stream: "lifecycle", data: { phase: "end" } });
       return { payloads: [{ text: "final answer" }] };
@@ -3300,13 +3309,18 @@ describe("OpenResponses HTTP API (e2e)", () => {
     const events = parseSseEvents(await res.text());
     const deltas = events
       .filter((event) => event.event === "response.output_text.delta")
-      .map((event) => {
-        const parsed = JSON.parse(event.data) as { delta?: string };
-        return parsed.delta ?? "";
-      })
-      .join("");
+      .map((event) => (parseSseData(event) as { delta?: string }).delta);
 
-    expect(deltas).toBe("final answer");
+    expect(deltas).toEqual(["coordination draft", "coordination draft updated", "final answer"]);
+    expect(parseSseData(findSseEvent(events, "response.output_text.done"))).toMatchObject({
+      text: "final answer",
+    });
+    expect(parseSseData(findSseEvent(events, "response.completed"))).toMatchObject({
+      response: {
+        status: "completed",
+        output: [{ content: [{ type: "output_text", text: "final answer" }] }],
+      },
+    });
   });
 
   it("falls back to payload text for streamed function_call responses", async () => {

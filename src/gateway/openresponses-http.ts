@@ -1089,6 +1089,17 @@ export async function handleOpenResponsesHttpRequest(
           pendingAssistantText ?? assistantText,
           input,
         );
+        // Forward provisional commentary without treating it as authoritative
+        // output; completion still emits the settled final text below.
+        if (input.replaceable && input.delta) {
+          writeSseEvent(res, {
+            type: "response.output_text.delta",
+            item_id: outputItemId,
+            output_index: 0,
+            content_index: 0,
+            delta: input.delta,
+          });
+        }
         if (
           !input.replaceable &&
           input.replace &&

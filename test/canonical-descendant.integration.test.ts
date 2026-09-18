@@ -76,6 +76,7 @@ import {
 import { runOpenClawAgentWriteTransaction } from "../src/state/openclaw-agent-db.js";
 import { openOpenClawStateDatabase } from "../src/state/openclaw-state-db.js";
 import { withOpenClawTestState } from "../src/test-utils/openclaw-test-state.js";
+import * as nativeAppPolicy from "./canonical-descendant-app-policy.test-support.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -1163,6 +1164,10 @@ describe("canonical descendant lifecycle through real owners", () => {
             const requestSpy = vi
               .spyOn(client, "request")
               .mockImplementation((method, input, options) => {
+                const nativePolicy = nativeAppPolicy.response(method);
+                if (nativePolicy) {
+                  return Promise.resolve(nativePolicy);
+                }
                 if (method === "plugin/installed" || method === "plugin/list") {
                   return Promise.resolve({
                     marketplaces:
@@ -1194,12 +1199,7 @@ describe("canonical descendant lifecycle through real owners", () => {
                 fixture.native.threads.get(binding.threadId),
                 "native child",
               );
-              expect(child.config).toMatchObject({
-                apps: { "synthetic-app": { enabled: true, destructive_enabled: false } },
-              });
-              expect(binding.pluginAppPolicyContext?.apps).toMatchObject({
-                "synthetic-app": { source: "account", allowDestructiveActions: false },
-              });
+              nativeAppPolicy.expectOverlay(child.config, binding.pluginAppPolicyContext);
               expect(errorLog).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({ code: diagnosticCode, pluginName: "missing-plugin" }),

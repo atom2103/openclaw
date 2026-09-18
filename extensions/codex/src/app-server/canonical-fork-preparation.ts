@@ -173,6 +173,7 @@ export async function prepareCanonicalCodexFork(params: {
               "app/list",
               "app/read",
               "app/installed",
+              "mcpServerStatus/list",
               "config/read",
               "configRequirements/read",
             ].includes(method)

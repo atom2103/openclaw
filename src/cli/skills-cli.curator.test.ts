@@ -7,19 +7,17 @@ import { GatewayTransportError } from "../gateway/transport-error.js";
 import { registerSkillsCli } from "./skills-cli.js";
 
 const mocks = vi.hoisted(() => {
-  const output: unknown[] = [];
   return {
     acquireGatewayLock: vi.fn(),
     callGateway: vi.fn(),
     config: {} as { gateway?: { mode: "local" | "remote" } },
     getSkillCuratorStatus: vi.fn(),
     releaseGatewayLock: vi.fn(),
-    output,
     defaultRuntime: {
       log: vi.fn(),
       error: vi.fn(),
       writeStdout: vi.fn(),
-      writeJson: vi.fn((value: unknown) => output.push(value)),
+      writeJson: vi.fn(),
       exit: vi.fn((code: number) => {
         throw new Error(`__exit__:${code}`);
       }),
@@ -108,7 +106,6 @@ describe("skills curator cli", () => {
 
   beforeEach(() => {
     delete mocks.config.gateway;
-    mocks.output.length = 0;
     mocks.getSkillCuratorStatus.mockReset().mockReturnValue(status);
     mocks.releaseGatewayLock.mockReset();
     mocks.acquireGatewayLock.mockReset().mockResolvedValue({ release: mocks.releaseGatewayLock });
@@ -156,7 +153,7 @@ describe("skills curator cli", () => {
     );
     await createProgram().parseAsync(["skills", "curator", "status", "--json"], { from: "user" });
     expect(mocks.defaultRuntime.writeJson).toHaveBeenCalledWith(status);
-    expect(mocks.output[0]).not.toHaveProperty("inventory");
+    expect(mocks.defaultRuntime.writeJson.mock.calls[0]?.[0]).not.toHaveProperty("inventory");
   });
 
   it("preserves marked live inventory with unknown dates in remote and local output", async () => {

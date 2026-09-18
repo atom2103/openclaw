@@ -176,25 +176,14 @@ Notes:
 
 `openclaw skills curator status` requests current Workshop inventory from the
 selected Gateway. With a compatible Gateway, JSON includes
-`"inventory": "live-workshop"`. Local status uses the same current configuration
-and Workshop discovery owner. Directly created skills appear without proposal
-history, including skills with no recorded usage. Inventory includes configured
-agents' custom Workshop roots, not every installed skill source. Existing loader
-limits and invalid-file exclusions still apply; unreadable skills produce an
-error rather than an empty collection.
-
-Unknown creation and state-change dates are `null`. Missing usage displays as
-`not recorded`; zero counts do not prove that a skill was never used. Tracking
-covers successful known skill reads through supported OpenClaw tools, including
-the Codex dynamic-tool bridge. Native Codex skill reads outside that boundary are
-not covered, and earlier usage is not backfilled.
+`"inventory": "live-workshop"`. Local status uses the current configuration too.
+Missing usage displays as `not recorded`, not proof that a skill was never used.
 
 An older Gateway can return an unmarked legacy response. The CLI accepts it
 without switching to local state and prints a limited-coverage notice in text
-output. JSON preserves the absence of the marker. Older clients connecting to a
-new Gateway keep their numeric-date response shape and see only the current
-skills whose creation dates are known. Upgrade both ends for the current
-Workshop view; do not use legacy coverage to infer inactivity.
+output. JSON preserves the absence of the marker. See
+[Workshop inventory and usage](/tools/skill-workshop/reference#workshop-inventory-and-usage)
+for membership, tracking limits, unknown dates, and upgrade behavior.
 
 On servers supporting full scanner reports, verification JSON includes `security.scannerReports.aig` (the full upstream SARIF report)
 and `security.scannerReports.skillspector` (the full upstream JSON report) when ClawHub

@@ -1,14 +1,29 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { createCodexDynamicToolBridge } from "../../../extensions/codex/test-api.js";
+import { getBeforeToolCallDiagnosticOptions } from "../../agents/before-tool-call-metadata.js";
+import { asToolParamsRecord, type AnyAgentTool } from "../../agents/tools/common.js";
 import { hasInternalDiagnosticEventInterest } from "../../infra/diagnostic-event-listener-presence.js";
 import {
   emitDiagnosticEvent,
   emitTrustedSkillUsedDiagnosticEvent,
+  onDiagnosticEvent,
+  onInternalDiagnosticEvent,
+  onTrustedInternalDiagnosticEvent,
   resetDiagnosticEventsForTest,
+  setDiagnosticsEnabledForProcess,
+  type DiagnosticEventPayload,
   waitForDiagnosticEventsDrained,
 } from "../../infra/diagnostic-events.js";
+import {
+  initializeGlobalHookRunner,
+  resetGlobalHookRunner,
+} from "../../plugins/hook-runner-global.js";
+import { createMockPluginRegistry } from "../../plugins/hooks.test-helpers.js";
+import { createEmptyPluginRegistry } from "../../plugins/registry-empty.js";
+import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import {
   closeOpenClawStateDatabaseForTest,
   openOpenClawStateDatabase,
@@ -17,46 +32,16 @@ import {
   createOpenClawTestState,
   type OpenClawTestState,
 } from "../../test-utils/openclaw-test-state.js";
-import { getSkillCuratorStatus, registerSkillUsageTracking } from "./curator.js";
-import {
-  applySkillProposal as applySkillProposalImpl,
-  proposeCreateSkill as proposeCreateSkillImpl,
-} from "./service.js";
-import { resolveWorkshopSkillsDir } from "./skills-root.js";
+import { consumeRunSkillUsage } from "../runtime/run-usage.js";
+import { createCanonicalFixtureSkill } from "../test-support/test-helpers.js";
+import { registerSkillUsageTracking } from "./curator.js";
 
 let testState: OpenClawTestState;
-const workshopConfig: OpenClawConfig = {};
-type OptionalWorkshopConfig<T> = Omit<T, "config"> & { config?: OpenClawConfig };
-const applySkillProposal = (
-  input: OptionalWorkshopConfig<Parameters<typeof applySkillProposalImpl>[0]>,
-) => applySkillProposalImpl({ config: workshopConfig, ...input });
-const proposeCreateSkill = (
-  input: OptionalWorkshopConfig<Parameters<typeof proposeCreateSkillImpl>[0]>,
-) => proposeCreateSkillImpl({ config: workshopConfig, ...input });
-
-async function writeInventorySkill(
-  config: OpenClawConfig,
-  agentId: string,
-  directory: string,
-  name = directory,
-) {
-  const skillFile = path.join(
-    resolveWorkshopSkillsDir(config, agentId, testState.env),
-    directory,
-    "SKILL.md",
-  );
-  await fs.mkdir(path.dirname(skillFile), { recursive: true });
-  await fs.writeFile(
-    skillFile,
-    `---\nname: ${name}\ndescription: Inventory fixture\n---\nInstructions\n`,
-  );
-  return skillFile;
-}
 
 beforeEach(async () => {
   resetDiagnosticEventsForTest();
   testState = await createOpenClawTestState({
-    layout: "state-only",
+    layout: "home",
     prefix: "openclaw-skill-curator-",
   });
 });
@@ -155,144 +140,232 @@ describe("skill curator usage tracking", () => {
     ).toEqual({ use_count: 3 });
   });
 
-  it("reports live usage for existing applied workshop skills and excludes missing files", async () => {
-    const proposal = await proposeCreateSkill({
-      workspaceDir: testState.workspaceDir,
-      env: testState.env,
-      agentId: "main",
-      name: "Daily Brief",
-      description: "Prepare a daily briefing",
-      content: "# Daily Brief\nPrepare the daily briefing.\n",
-    });
-    const applied = await applySkillProposal({
-      workspaceDir: testState.workspaceDir,
-      env: testState.env,
-      agentId: "main",
-      proposalId: proposal.record.id,
-      expectedRevisionHash: proposal.revisionHash,
-    });
-    const skillFile = proposal.record.target.skillFile;
-    const database = openOpenClawStateDatabase({ env: testState.env });
-    database.db
-      .prepare(
-        `INSERT INTO skill_usage (
-          skill_file, skill_key, skill_name, skill_source,
-          first_used_at_ms, last_used_at_ms, use_count, last_agent_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(skillFile, "daily-brief", "Daily Brief", "workspace", 1_000, 2_000, 3, "main");
+  describe("persistent skill usage through registered Codex dynamic tools", () => {
+    const runId = "skill-usage-run";
+    const skillName = "daily-brief";
+    let skillFile: string;
+    let unregisterUsage: () => void;
+    let publicEvents: DiagnosticEventPayload[];
+    let sharedEvents: DiagnosticEventPayload[];
+    let trustedEvents: DiagnosticEventPayload[];
 
-    expect(getSkillCuratorStatus({ config: workshopConfig, env: testState.env })).toMatchObject({
-      counts: { active: 1, stale: 0, archived: 0 },
-      overlaps: [],
-      skills: [
-        {
-          skillFile,
-          skillKey: "daily-brief",
-          skillName: "daily-brief",
-          state: "active",
-          pinned: false,
-          createdAtMs: Date.parse(applied.record.appliedAt!),
-          stateChangedAtMs: Date.parse(applied.record.appliedAt!),
-          lastUsedAtMs: 2_000,
-          useCount: 3,
-          archivedReason: null,
+    beforeEach(async () => {
+      skillFile = await testState.writeText("skills/daily-brief/SKILL.md", "# Daily brief\n");
+      resetGlobalHookRunner();
+      setActivePluginRegistry(createEmptyPluginRegistry());
+      setDiagnosticsEnabledForProcess(false);
+      publicEvents = [];
+      sharedEvents = [];
+      trustedEvents = [];
+      onDiagnosticEvent((event) => publicEvents.push(event));
+      onInternalDiagnosticEvent((event) => sharedEvents.push(event));
+      onTrustedInternalDiagnosticEvent((event) => trustedEvents.push(event));
+      unregisterUsage = registerSkillUsageTracking({ env: testState.env });
+    });
+
+    afterEach(async () => {
+      await waitForDiagnosticEventsDrained();
+      unregisterUsage();
+      consumeRunSkillUsage(runId);
+      resetGlobalHookRunner();
+      setActivePluginRegistry(createEmptyPluginRegistry());
+    });
+
+    function createBridge(options: { execute?: AnyAgentTool["execute"]; command?: boolean } = {}) {
+      const execute = vi.fn<AnyAgentTool["execute"]>(
+        options.execute ??
+          (async (_callId, args) => {
+            const filePath = asToolParamsRecord(args).path;
+            if (typeof filePath !== "string") {
+              throw new Error("Expected a file path");
+            }
+            return {
+              content: [{ type: "text", text: await fs.readFile(filePath, "utf8") }],
+              details: {},
+            };
+          }),
+      );
+      const toolName = options.command ? "daily_brief" : "read";
+      const bridge = createCodexDynamicToolBridge({
+        tools: [
+          {
+            name: toolName,
+            label: toolName,
+            description: "Read a file",
+            parameters: Type.Object({ path: Type.String() }),
+            execute,
+          },
+        ],
+        signal: new AbortController().signal,
+        hookContext: {
+          agentId: "main",
+          sessionKey: "agent:main:skill-usage",
+          sessionId: "skill-usage-session",
+          runId,
+          workspaceDir: testState.workspaceDir,
+          loopDetection: { enabled: false },
+          skillsSnapshot: {
+            prompt: "",
+            skills: [{ name: skillName }],
+            resolvedSkills: [
+              createCanonicalFixtureSkill({
+                name: skillName,
+                description: "Daily brief",
+                filePath: skillFile,
+                baseDir: path.dirname(skillFile),
+                source: "workspace",
+              }),
+            ],
+          },
+          ...(options.command
+            ? {
+                skillCommand: {
+                  commandName: "daily-brief",
+                  skillName,
+                  skillSource: "workspace",
+                  skillFile,
+                  toolName,
+                },
+              }
+            : {}),
         },
-      ],
-    });
+      });
+      expect(bridge.telemetry.quarantinedTools).toEqual([]);
+      expect(bridge.availableTools.map((tool) => tool.name)).toEqual([toolName]);
+      for (const tool of bridge.availableTools) {
+        expect(getBeforeToolCallDiagnosticOptions(tool)?.emitDiagnostics).toBe(false);
+      }
+      const call = (callId: string, filePath = skillFile) =>
+        bridge.handleToolCall({
+          threadId: "skill-usage-thread",
+          turnId: "skill-usage-turn",
+          callId,
+          namespace: "openclaw",
+          tool: toolName,
+          arguments: { path: filePath },
+        });
+      return { call, execute };
+    }
 
-    expect(
-      getSkillCuratorStatus({
-        config: { agents: { entries: { other: { agentDir: testState.path("other-agent") } } } },
-        env: testState.env,
-      }).skills,
-    ).toEqual([]);
-    await fs.unlink(skillFile);
-    expect(getSkillCuratorStatus({ config: workshopConfig, env: testState.env })).toMatchObject({
-      counts: { active: 0, stale: 0, archived: 0 },
-      skills: [],
-      overlaps: [],
-    });
-    expect(
-      database.db
-        .prepare("SELECT count(*) AS count FROM skill_workshop_proposals WHERE status = 'applied'")
-        .get(),
-    ).toEqual({ count: 1 });
-  });
+    function usageRows() {
+      return openOpenClawStateDatabase({ env: testState.env })
+        .db.prepare(
+          "SELECT skill_file, skill_name, skill_source, use_count, last_agent_id FROM skill_usage",
+        )
+        .all();
+    }
 
-  it("uses current multi-agent roots and file identity despite disabled skills and duplicate roots", async () => {
-    const alphaDir = testState.path("alpha-agent");
-    const config: OpenClawConfig = {
-      agents: {
-        entries: {
-          alpha: { agentDir: alphaDir, skills: ["other"] },
-          beta: { agentDir: testState.path("beta-agent") },
-          mirror: { agentDir: alphaDir },
-          missing: { agentDir: testState.path("absent-agent") },
-        },
+    function expectedUsageRow(count: number) {
+      return {
+        skill_file: skillFile,
+        skill_name: skillName,
+        skill_source: "workspace",
+        use_count: count,
+        last_agent_id: "main",
+      };
+    }
+
+    it.each([false, true])(
+      "counts repeated successful reads with process diagnostics=%s",
+      async (enabled) => {
+        setDiagnosticsEnabledForProcess(enabled);
+        const { call, execute } = createBridge();
+        expect(await call("read-1")).toMatchObject({
+          success: true,
+          contentItems: [{ type: "inputText", text: "# Daily brief\n" }],
+        });
+        await waitForDiagnosticEventsDrained();
+        expect(usageRows()).toEqual([expectedUsageRow(1)]);
+        expect(await call("read-2")).toMatchObject({ success: true });
+        await waitForDiagnosticEventsDrained();
+        expect(execute).toHaveBeenCalledTimes(2);
+        expect(usageRows()).toEqual([expectedUsageRow(2)]);
+        expect(consumeRunSkillUsage(runId)).toEqual([
+          { name: skillName, source: "workspace", activation: "read", skillFile },
+        ]);
+        expect(consumeRunSkillUsage(runId)).toEqual([]);
+        expect(publicEvents).toEqual([]);
+        expect(sharedEvents.map((event) => event.type)).toEqual(
+          enabled ? ["skill.used", "skill.used"] : [],
+        );
+        expect(trustedEvents.map((event) => event.type)).toEqual(["skill.used", "skill.used"]);
+        expect(JSON.stringify([...sharedEvents, ...trustedEvents])).not.toContain(skillFile);
       },
-      skills: { entries: { shared: { enabled: false } } },
-    };
-    const alphaFile = await writeInventorySkill(config, "alpha", "first", "shared");
-    const betaFile = await writeInventorySkill(config, "beta", "second", "shared");
-    const unusedFile = await writeInventorySkill(config, "beta", "unused");
-    const database = openOpenClawStateDatabase({ env: testState.env });
-    const insert = database.db.prepare(
-      `INSERT INTO skill_usage (skill_file, skill_key, skill_name, skill_source, first_used_at_ms, last_used_at_ms, use_count, last_agent_id) VALUES (?, 'shared', 'Old Name', 'workspace', 10, 20, ?, 'alpha')`,
     );
-    insert.run(alphaFile, 1);
-    insert.run(betaFile, 2);
-    const read = () => getSkillCuratorStatus({ config, env: testState.env });
-    expect(read()).toMatchObject({
-      inventory: "live-workshop",
-      counts: { active: 3, stale: 0, archived: 0 },
-      skills: [
-        {
-          skillFile: alphaFile,
-          skillName: "shared",
-          useCount: 1,
-          lastUsedAtMs: 20,
-          createdAtMs: null,
-          stateChangedAtMs: null,
-        },
-        {
-          skillFile: betaFile,
-          skillName: "shared",
-          useCount: 2,
-          lastUsedAtMs: 20,
-          createdAtMs: null,
-          stateChangedAtMs: null,
-        },
-        {
-          skillFile: unusedFile,
-          useCount: 0,
-          lastUsedAtMs: null,
-          createdAtMs: null,
-          stateChangedAtMs: null,
-        },
-      ],
-    });
-    await writeInventorySkill(config, "alpha", "first", "renamed");
-    expect(read().skills[0]).toMatchObject({
-      skillFile: alphaFile,
-      skillName: "renamed",
-      skillKey: "renamed",
-      useCount: 1,
-    });
-    const movedFile = path.join(path.dirname(path.dirname(betaFile)), "moved", "SKILL.md");
-    await fs.rename(path.dirname(betaFile), path.dirname(movedFile));
-    expect(read().skills).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          skillFile: movedFile,
-          skillName: "shared",
-          useCount: 0,
-          lastUsedAtMs: null,
-        }),
-      ]),
+
+    it.each(["error", "failed", "blocked", "cancelled", "timed_out"])(
+      "does not count a structured %s read",
+      async (status) => {
+        const { call, execute } = createBridge({
+          execute: async () => ({
+            content: [{ type: "text", text: "Read did not complete" }],
+            details: { status },
+          }),
+        });
+        expect(await call("failed-read")).toMatchObject({ success: false });
+        await waitForDiagnosticEventsDrained();
+        expect(execute).toHaveBeenCalledOnce();
+        expect(consumeRunSkillUsage(runId)).toEqual([]);
+        expect(usageRows()).toEqual([]);
+        expect(trustedEvents).toEqual([]);
+      },
     );
-    expect(read().skills.map((skill) => skill.skillFile)).not.toContain(betaFile);
-    config.agents = { entries: { alpha: { agentDir: testState.path("replacement-root") } } };
-    expect(read()).toMatchObject({ counts: { active: 0, stale: 0, archived: 0 }, skills: [] });
+
+    it("does not count a thrown read", async () => {
+      const { call } = createBridge({
+        execute: async () => {
+          throw new Error("Read failed");
+        },
+      });
+      expect(await call("thrown-read")).toMatchObject({ success: false });
+      await waitForDiagnosticEventsDrained();
+      expect(usageRows()).toEqual([]);
+      expect(consumeRunSkillUsage(runId)).toEqual([]);
+      expect(trustedEvents).toEqual([]);
+    });
+
+    it("does not count a read blocked before execution", async () => {
+      initializeGlobalHookRunner(
+        createMockPluginRegistry([
+          {
+            hookName: "before_tool_call",
+            handler: async () => ({ block: true, blockReason: "Blocked by test policy" }),
+          },
+        ]),
+      );
+      const { call, execute } = createBridge();
+      expect(await call("blocked-read")).toMatchObject({ success: false, executionStarted: false });
+      await waitForDiagnosticEventsDrained();
+      expect(execute).not.toHaveBeenCalled();
+      expect(usageRows()).toEqual([]);
+      expect(consumeRunSkillUsage(runId)).toEqual([]);
+      expect(trustedEvents).toEqual([]);
+    });
+
+    it.each(["skills/unknown/SKILL.md", "README.md"])(
+      "does not count reading %s outside the skill snapshot",
+      async (filePath) => {
+        const otherFile = await testState.writeText(filePath, "Other file\n");
+        const { call } = createBridge();
+        expect(await call("other-read", otherFile)).toMatchObject({ success: true });
+        await waitForDiagnosticEventsDrained();
+        expect(usageRows()).toEqual([]);
+        expect(consumeRunSkillUsage(runId)).toEqual([]);
+        expect(trustedEvents).toEqual([]);
+      },
+    );
+
+    it("preserves explicit tool-dispatched skill command activation", async () => {
+      const { call } = createBridge({ command: true });
+      expect(await call("skill-command")).toMatchObject({ success: true });
+      await waitForDiagnosticEventsDrained();
+      expect(usageRows()).toEqual([expectedUsageRow(1)]);
+      expect(consumeRunSkillUsage(runId)).toEqual([
+        { name: skillName, source: "workspace", activation: "command", skillFile },
+      ]);
+      expect(trustedEvents).toMatchObject([
+        { type: "skill.used", activation: "command", toolName: "daily_brief" },
+      ]);
+    });
   });
 });

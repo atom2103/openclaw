@@ -37,6 +37,8 @@ current installed skill's `name`, `skillKey`, `description`, and complete `conte
 An unknown agent or a skill outside that agent's Workshop inventory returns an
 error. It never reads a retained proposal as a substitute for a missing skill.
 
+### Workshop inventory and usage
+
 `skills.curator.status` reports live skill usage recorded from trusted
 `skill.used` events, retained pre-cron collection review records, and per-workspace
 experience review outcomes. Current collection reviews use automation run history.
@@ -72,6 +74,8 @@ not be treated as a complete inventory or used to infer inactivity.
 `skills.curator.pin`, `skills.curator.unpin`, and `skills.curator.restore` remain
 registered for existing clients, but always return an error explaining that the
 weekly collection review manages the skill collection.
+
+### Revision and history methods
 
 `requestRevision` is Gateway-only (no CLI or agent-tool equivalent): it
 forwards free-text revision instructions to the owning agent's chat session

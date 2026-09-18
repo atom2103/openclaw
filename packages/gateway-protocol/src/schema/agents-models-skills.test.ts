@@ -632,27 +632,28 @@ describe("SkillsProposalInspectResultSchema", () => {
 });
 
 describe("SkillsCuratorStatusResultSchema", () => {
+  const entry = {
+    skillFile: "/workshop/direct/SKILL.md",
+    skillKey: "direct",
+    skillName: "direct",
+    state: "active",
+    pinned: false,
+    createdAtMs: 100,
+    stateChangedAtMs: 100,
+    lastUsedAtMs: null,
+    useCount: 0,
+    archivedReason: null,
+  };
+  const legacy = {
+    lastAttemptAtMs: null,
+    lastSuccessAtMs: null,
+    lastError: null,
+    counts: { active: 1, stale: 0, archived: 0 },
+    skills: [entry],
+    overlaps: [],
+  };
+
   it("keeps legacy numeric dates closed while live inventory requires its marker", () => {
-    const entry = {
-      skillFile: "/workshop/direct/SKILL.md",
-      skillKey: "direct",
-      skillName: "direct",
-      state: "active",
-      pinned: false,
-      createdAtMs: 100,
-      stateChangedAtMs: 100,
-      lastUsedAtMs: null,
-      useCount: 0,
-      archivedReason: null,
-    };
-    const legacy = {
-      lastAttemptAtMs: null,
-      lastSuccessAtMs: null,
-      lastError: null,
-      counts: { active: 1, stale: 0, archived: 0 },
-      skills: [entry],
-      overlaps: [],
-    };
     const unknownEntry = { ...entry, createdAtMs: null, stateChangedAtMs: null };
     const full = { ...legacy, inventory: "live-workshop", skills: [unknownEntry] };
     expectAccepted(SkillsCuratorStatusResultSchema, legacy);
@@ -678,12 +679,10 @@ describe("SkillsCuratorStatusResultSchema", () => {
   });
   it("accepts typed collection and experience outcomes while rejecting invalid review records", () => {
     const legacyResult = {
+      ...legacy,
       lastAttemptAtMs: 100,
       lastSuccessAtMs: 101,
-      lastError: null,
-      counts: { active: 1, stale: 0, archived: 0 },
       skills: [],
-      overlaps: [],
     };
     const result = {
       ...legacyResult,

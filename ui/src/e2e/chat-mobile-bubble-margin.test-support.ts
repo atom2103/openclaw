@@ -96,8 +96,36 @@ export const marginCases = [
       messages: [message(role, content)],
       side: role === "user" ? "right" : "left",
       selector,
+      ...(id === "assistant-image" ? { imageSize: { width: 960, height: 540 } } : {}),
     })),
   ),
+  ...[
+    { width: 320, height: 180, attachment: false },
+    { width: 320, height: 180, attachment: true },
+    { width: 960, height: 540, attachment: true },
+  ].map(({ width, height, attachment }) => ({
+    id: `assistant-${attachment ? "attachment-image" : "image"}-${width}`,
+    messages: [
+      message("assistant", [
+        attachment
+          ? {
+              type: "attachment",
+              attachment: {
+                kind: "image",
+                url: "https://media.example/preview.png",
+                mimeType: "image/png",
+                label: "sample.png",
+                width,
+                height,
+              },
+            }
+          : { type: "image", url: "https://media.example/preview.png", width, height },
+      ]),
+    ],
+    side: "left",
+    selector: ".chat-message-image",
+    imageSize: { width, height },
+  })),
   ...[2, 3, 5].map((count) => ({
     id: `user-gallery-${count}`,
     messages: [
@@ -232,20 +260,23 @@ export function marginScenario(testCase: MarginCase): ControlUiMockGatewayScenar
   };
 }
 
-export async function createMarginImage(page: Page): Promise<Buffer> {
-  const encoded = await page.evaluate(() => {
+export async function createMarginImage(
+  page: Page,
+  size = { width: 960, height: 540 },
+): Promise<Buffer> {
+  const encoded = await page.evaluate(({ width, height }) => {
     const canvas = document.createElement("canvas");
-    canvas.width = 960;
-    canvas.height = 540;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext("2d")!;
     context.fillStyle = "teal";
-    context.fillRect(0, 0, 960, 540);
+    context.fillRect(0, 0, width, height);
     context.fillStyle = "gold";
     context.beginPath();
-    context.arc(480, 270, 160, 0, 2 * Math.PI);
+    context.arc(width / 2, height / 2, height * (160 / 540), 0, 2 * Math.PI);
     context.fill();
     return canvas.toDataURL("image/png").split(",")[1]!;
-  });
+  }, size);
   return Buffer.from(encoded, "base64");
 }
 

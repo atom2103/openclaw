@@ -29,7 +29,8 @@ suite.define(() => {
       await suite.withPage(
         { viewport: { width: 1440, height: 1200 }, colorScheme: theme, reducedMotion: "reduce" },
         async ({ page }) => {
-          const image = await createMarginImage(page);
+          const imageSize = "imageSize" in testCase ? testCase.imageSize : undefined;
+          const image = await createMarginImage(page, imageSize);
           const video = await readFile(new URL("./fixtures/video-poster.mp4", import.meta.url));
           await page.route("https://media.example/**", (route) => {
             if (route.request().url().endsWith("png")) {
@@ -93,6 +94,17 @@ suite.define(() => {
               })
               .toBeCloseTo(testCase.id === "user-audio" ? 17 : 0, 0);
             const mobile = await measureMargin(page, testCase);
+            if (imageSize) {
+              const expectedWidth = Math.min(imageSize.width, mobile.columnWidth * 0.9);
+              expect(mobile.width, `${testCase.id} fits the column once`).toBeCloseTo(
+                expectedWidth,
+                1,
+              );
+              expect(mobile.height, `${testCase.id} preserves its aspect ratio`).toBeCloseTo(
+                expectedWidth * (imageSize.height / imageSize.width),
+                1,
+              );
+            }
             for (const media of mobile.media.filter((item) => item.width > 0)) {
               expect(
                 Math.min(media.left, media.right),

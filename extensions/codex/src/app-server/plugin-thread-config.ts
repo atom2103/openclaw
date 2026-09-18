@@ -2,7 +2,6 @@
  * Builds Codex thread config patches that expose only policy-approved apps
  * for native Codex turns.
  */
-import crypto from "node:crypto";
 import { embeddedAgentLog } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { codexAppIdentityKey } from "./app-identity.js";
 import { defaultCodexAppInventoryCache, CodexAppInventoryCache } from "./app-inventory-cache.js";
@@ -24,6 +23,8 @@ import {
   type CodexPluginInventoryDiagnostic,
   type CodexPluginRuntimeRequest,
 } from "./plugin-inventory.js";
+import { fingerprintCodexPluginPolicy } from "./plugin-policy-fingerprint.js";
+export { stringifyCodexPluginPolicy } from "./plugin-policy-fingerprint.js";
 import type { CodexPluginMetadataCache } from "./plugin-metadata-cache.js";
 import {
   nativeMetadataFallbackContext,
@@ -140,7 +141,7 @@ export function buildCodexPluginThreadConfigInputFingerprint(params: {
   appCacheKey?: string;
 }): string {
   const policy = resolveCodexPluginsPolicy(params.pluginConfig);
-  return fingerprintJson({
+  return fingerprintCodexPluginPolicy({
     version: CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION,
     policy: policyFingerprint(policy),
     appCacheKey: params.appCacheKey ?? null,
@@ -408,20 +409,22 @@ export async function buildCodexPluginThreadConfig(
         continue;
       }
       provisionalAppIds.add(app.id);
+      const nativeKeys =
+        !record.policy.allowDestructiveActions || record.policy.destructiveApprovalMode === "ask"
+          ? await getNativeToolKeys()
+          : undefined;
       apps[app.id] = buildEnabledAppConfig(
         record.policy,
         !record.policy.allowDestructiveActions || record.policy.destructiveApprovalMode === "ask"
           ? buildCodexAppApprovalOverrides(
               admissionConfig.config,
-              withCodexNativeAppToolKeys(app, await getNativeToolKeys()),
+              withCodexNativeAppToolKeys(app, nativeKeys),
               record.policy.allowDestructiveActions ? "ask" : "deny",
             )
           : undefined,
       );
       policyApps[app.id] = {
-        ...(!record.policy.allowDestructiveActions
-          ? nativeMetadataFallbackContext(record.policy, await getNativeToolKeys(), app.id)
-          : {}),
+        ...nativeMetadataFallbackContext(record.policy, nativeKeys, app.id),
         configKey: record.policy.configKey,
         marketplaceName: record.policy.marketplaceName,
         pluginName: record.policy.pluginName,
@@ -448,20 +451,22 @@ export async function buildCodexPluginThreadConfig(
     const accountApp = toCodexPluginOwnedAccountApp(app);
     // Global callability does not prove this thread's workspace/managed policy.
     provisionalAppIds.add(app.id);
+    const nativeKeys =
+      !accountPolicy.allowDestructiveActions || accountPolicy.destructiveApprovalMode === "ask"
+        ? await getNativeToolKeys()
+        : undefined;
     apps[app.id] = buildEnabledAppConfig(
       accountPolicy,
       !accountPolicy.allowDestructiveActions || accountPolicy.destructiveApprovalMode === "ask"
         ? buildCodexAppApprovalOverrides(
             admissionConfig.config,
-            withCodexNativeAppToolKeys(accountApp, await getNativeToolKeys()),
+            withCodexNativeAppToolKeys(accountApp, nativeKeys),
             accountPolicy.allowDestructiveActions ? "ask" : "deny",
           )
         : undefined,
     );
     policyApps[app.id] = {
-      ...(!accountPolicy.allowDestructiveActions
-        ? nativeMetadataFallbackContext(accountPolicy, await getNativeToolKeys(), app.id)
-        : {}),
+      ...nativeMetadataFallbackContext(accountPolicy, nativeKeys, app.id),
       source: "account",
       appName: app.name,
       allowDestructiveActions: accountPolicy.allowDestructiveActions,
@@ -482,7 +487,7 @@ export async function buildCodexPluginThreadConfig(
     ...(provisionalAppIds.size > 0
       ? { provisionalAppIds: Array.from(provisionalAppIds).toSorted() }
       : {}),
-    fingerprint: fingerprintJson({
+    fingerprint: fingerprintCodexPluginPolicy({
       version: CODEX_PLUGIN_THREAD_CONFIG_FINGERPRINT_VERSION,
       inputFingerprint,
       configPatch,
@@ -540,7 +545,7 @@ function emptyPluginThreadConfig(params: {
   const policyContext = buildPluginAppPolicyContext({}, {});
   return {
     enabled: params.enabled,
-    fingerprint: fingerprintJson({
+    fingerprint: fingerprintCodexPluginPolicy({
       version: CODEX_PLUGIN_THREAD_CONFIG_FINGERPRINT_VERSION,
       inputFingerprint: params.inputFingerprint,
       configPatch: params.configPatch ?? null,
@@ -696,7 +701,7 @@ export function buildPluginAppPolicyContext(
   pluginAppIds: Record<string, string[]>,
 ): PluginAppPolicyContext {
   return {
-    fingerprint: fingerprintJson({ version: 2, apps, pluginAppIds }),
+    fingerprint: fingerprintCodexPluginPolicy({ version: 2, apps, pluginAppIds }),
     apps,
     pluginAppIds,
   };
@@ -762,23 +767,4 @@ function mergeJsonObjects(left: JsonObject, right: JsonObject): JsonObject {
     }
   }
   return merged;
-}
-
-function fingerprintJson(value: JsonValue): string {
-  return crypto.createHash("sha256").update(stringifyCodexPluginPolicy(value)).digest("hex");
-}
-
-export function stringifyCodexPluginPolicy(value: unknown): string {
-  // Fingerprints must be process-stable across object insertion order so prompt
-  // cache and thread-binding comparisons do not churn between runs.
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stringifyCodexPluginPolicy(item)).join(",")}]`;
-  }
-  if (value && typeof value === "object") {
-    return `{${Object.entries(value)
-      .toSorted(([left], [right]) => left.localeCompare(right))
-      .map(([key, item]) => `${JSON.stringify(key)}:${stringifyCodexPluginPolicy(item)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
 }

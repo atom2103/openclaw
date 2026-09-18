@@ -1,7 +1,7 @@
 import { CodexAppInventoryCache } from "./app-inventory-cache.js";
 import type { CodexPluginRuntimeRequest } from "./plugin-inventory.js";
 import type { PluginAppPolicyContext } from "./plugin-thread-config.js";
-import { isJsonObject } from "./protocol.js";
+import { isJsonObject, type JsonObject } from "./protocol.js";
 
 /** Recheck only restrictions installed by our own missing-metadata fallback. */
 export function withCodexMetadataRecovery<
@@ -41,7 +41,7 @@ export function withCodexMetadataRecovery<
     if (candidates.length === 0) {
       return scoped;
     }
-    const globalInput = { ...input, forceRefresh: true };
+    const globalInput: JsonObject = { ...input, forceRefresh: true };
     delete globalInput.threadId;
     const global = await params.request(method, globalInput);
     if (!isJsonObject(global) || !Array.isArray(global.apps)) {

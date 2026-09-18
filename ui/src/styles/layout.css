@@ -2784,9 +2784,7 @@ wa-dropdown-item.sidebar-customize-menu__item {
   text-decoration: none;
 }
 
-/* The agent switcher marks its selection in the trailing details rail
-   (.session-menu__check), so the native leading checkmark is layout-only: it
-   reserved a column that pushed avatar rows out of the command rows' gutter. */
+/* Agent tiles use an avatar ring; command rows have no checked state. */
 .sidebar-agent-menu .sidebar-customize-menu__item::part(checkmark) {
   display: none;
 }
@@ -4019,7 +4017,6 @@ openclaw-tooltip.sidebar-hover-tooltip {
   min-width: 0;
   width: auto;
   justify-content: center;
-  /* Web Awesome's checkbox-adjacent host padding survives the hidden checkmark. */
   padding: 0 !important;
   color: var(--muted) !important;
   text-align: center;
@@ -4188,6 +4185,11 @@ wa-dropdown.sidebar-agent-menu::part(menu) {
   overflow-y: auto;
   scrollbar-color: color-mix(in srgb, var(--border) 72%, transparent) transparent;
   scrollbar-width: thin;
+}
+
+.sidebar-agent-menu__view {
+  flex: none;
+  padding: 0 8px;
 }
 
 .sidebar-agent-menu > .sidebar-customize-menu__separator {

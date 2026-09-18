@@ -148,9 +148,20 @@ suite.define(() => {
         expect(await sidebar.locator('[data-session-key="agent:forge:notes"]').count()).toBe(0);
         await captureSidebarUiProof(suite, page, "sidebar-roster-before.png");
         await chip.click();
-        const modeToggle = sidebar.locator('wa-dropdown-item[value="command:sidebar-agents"]');
-        await expect.poll(() => modeToggle.textContent()).toContain("Sessions from every agent");
-        await modeToggle.click();
+        const modeToggle = sidebar.getByRole("switch", { name: "Show all agents in sidebar" });
+        await expect.poll(() => modeToggle.isVisible()).toBe(true);
+        expect(await modeToggle.isChecked()).toBe(false);
+        const activeAgentTile = sidebar.locator(".sidebar-agent-menu__agent-switch--active");
+        const expectAgentMenuFocus = () =>
+          expect
+            .poll(() => activeAgentTile.evaluate((el) => el === document.activeElement))
+            .toBe(true);
+        await expectAgentMenuFocus();
+        await page.keyboard.press("End");
+        await expect
+          .poll(() => modeToggle.evaluate((el) => el === document.activeElement))
+          .toBe(true);
+        await page.keyboard.press("Enter");
 
         const headers = sidebar.locator(".sidebar-agent-roster__row");
         await expect.poll(() => headers.count()).toBe(4);
@@ -218,35 +229,53 @@ suite.define(() => {
         await expect.poll(async () => (await activityReads()).length).toBe(initialReads + 2);
         await expect.poll(() => sessionRows.count()).toBe(8);
 
-        await workspace.focus();
-        await page.keyboard.press("Enter");
         const workspaceMenu = sidebar.locator(".sidebar-agent-menu");
+        await page.mouse.move(1100, 700);
+        await expect.poll(() => workspaceMenu.count()).toBe(0);
+        await workspace.focus();
+        await Promise.all([
+          sidebar.evaluate(
+            (element) =>
+              new Promise<void>((resolve) => {
+                element.addEventListener("wa-after-show", () => resolve(), { once: true });
+              }),
+          ),
+          workspace.hover(),
+        ]);
+        expect(await workspace.evaluate((element) => element === document.activeElement)).toBe(
+          true,
+        );
+        await page.keyboard.press("Enter");
         const workspaceMenuItems = workspaceMenu.locator(":scope > wa-dropdown-item");
-        await expect.poll(() => workspaceMenuItems.count()).toBe(4);
+        await expect.poll(() => workspaceMenuItems.count()).toBe(3);
         expect(
           await workspaceMenuItems.evaluateAll((items) =>
             items.map((item) => item.getAttribute("value")),
           ),
-        ).toEqual([
-          "command:all-agents",
-          "command:new-agent",
-          "command:agent-settings",
-          "command:sidebar-agents",
-        ]);
+        ).toEqual(["command:new-agent", "command:capabilities", "command:agent-settings"]);
         expect(
           await workspaceMenu.locator(".sidebar-agent-menu__agent-grid wa-dropdown-item").count(),
         ).toBe(4);
         expect(await workspaceMenu.locator('[value="command:help"]').count()).toBe(0);
+        expect(await workspaceMenu.locator("wa-dropdown-item[aria-checked]").count()).toBe(0);
+        expect(await modeToggle.isChecked()).toBe(true);
+        const agentTiles = workspaceMenu.locator(
+          ".sidebar-agent-menu__agent-grid wa-dropdown-item",
+        );
         await expect
-          .poll(() =>
-            workspaceMenuItems.first().evaluate((element) => element === document.activeElement),
-          )
+          .poll(() => agentTiles.first().evaluate((element) => element === document.activeElement))
           .toBe(true);
         await page.keyboard.press("ArrowDown");
         await expect
-          .poll(() =>
-            workspaceMenuItems.nth(1).evaluate((element) => element === document.activeElement),
-          )
+          .poll(() => agentTiles.nth(1).evaluate((element) => element === document.activeElement))
+          .toBe(true);
+        await page.keyboard.press("End");
+        await expect
+          .poll(() => modeToggle.evaluate((el) => el === document.activeElement))
+          .toBe(true);
+        await page.keyboard.press("ArrowUp");
+        await expect
+          .poll(() => workspaceMenuItems.last().evaluate((el) => el === document.activeElement))
           .toBe(true);
         await captureSidebarUiProof(suite, page, "sidebar-team-workspace-menu.png");
         await page.keyboard.press("Escape");
@@ -394,11 +423,35 @@ suite.define(() => {
           .poll(() => chip.evaluate((element) => element === document.activeElement))
           .toBe(true);
         await chip.click();
-        await expect.poll(() => modeToggle.textContent()).toContain("Sessions from every agent");
+        await expect.poll(() => modeToggle.isVisible()).toBe(true);
+        expect(await modeToggle.isChecked()).toBe(false);
         expect(
           await sidebar.locator(".sidebar-agent-menu__agent-grid wa-dropdown-item").count(),
         ).toBe(4);
+        await expectAgentMenuFocus();
         await page.keyboard.press("Escape");
+        await expect.poll(() => workspaceMenu.count()).toBe(0);
+        await page.setViewportSize({ width: 390, height: 844 });
+        const drawerToggle = page
+          .locator(".topbar-nav-toggle:visible, .chat-pane__nav-toggle:visible")
+          .first();
+        await drawerToggle.click();
+        for (const trigger of [chip, workspace]) {
+          if (trigger === workspace) {
+            await chip.press("Enter");
+            await expect.poll(() => modeToggle.isVisible()).toBe(true);
+            await modeToggle.press("Enter");
+          }
+          await trigger.press("Enter");
+          await expect.poll(() => modeToggle.isVisible()).toBe(true);
+          await expectAgentMenuFocus();
+          await page.keyboard.press("Escape");
+          await expect.poll(() => workspaceMenu.count()).toBe(0);
+          expect(await sidebar.isVisible()).toBe(true);
+          await expect
+            .poll(() => trigger.evaluate((el) => el === document.activeElement))
+            .toBe(true);
+        }
       },
     );
   });

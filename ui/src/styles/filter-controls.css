@@ -1,0 +1,57 @@
+.filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.filter-switch input {
+  appearance: none;
+  justify-self: end;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--bg-hover);
+  cursor: var(--cursor-action);
+}
+
+.filter-switch input::before {
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 2px;
+  border-radius: 50%;
+  background: var(--muted);
+  content: "";
+  transition: transform 120ms ease;
+}
+
+.filter-switch input:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.filter-switch input:checked::before {
+  transform: translateX(12px);
+  background: var(--accent-foreground);
+}
+
+.filter-switch input:dir(rtl):checked::before {
+  transform: translateX(-12px);
+}
+
+.filter-switch input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filter-switch input::before {
+    transition: none;
+  }
+}

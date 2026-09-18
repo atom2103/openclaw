@@ -48,6 +48,8 @@ import {
 } from "./sidebar-attention-dismissals.ts";
 import type { SidebarMenusController } from "./sidebar-menus-controller.ts";
 
+export { focusActiveAgentMenuItem } from "./app-sidebar-agent-menu.ts";
+
 export function renderSidebarCustomizeMenuForController(controller: SidebarMenusController) {
   const { host } = controller;
   const position = controller.customizeMenuPosition;
@@ -108,7 +110,6 @@ export function renderSidebarAgentMenuForController(controller: SidebarMenusCont
     position,
     basePath: host.basePath,
     activeId,
-    scopeId: host.sessionDataContext?.agentSelection.state.scopeId ?? null,
     activeName: normalizeAgentLabel(agent ?? { id: activeId }, identity),
     agents,
     identities,

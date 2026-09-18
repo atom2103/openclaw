@@ -42,19 +42,15 @@ describe("AppSidebar agent roster", () => {
           [...(menu?.querySelectorAll(":scope > wa-dropdown-item") ?? [])].map((item) =>
             item.textContent?.trim(),
           ),
-        ).toEqual(["Every agent", "New agent", "Agent settings", "Sessions from every agent"]);
+        ).toEqual(["New agent", "What can Harbor do?", "Agent settings"]);
         expect(
           menu?.querySelectorAll(".sidebar-agent-menu__agent-grid wa-dropdown-item"),
         ).toHaveLength(3);
         expect(
           [...(menu?.querySelectorAll("a") ?? [])].map((link) => link.getAttribute("href")),
         ).toEqual([]);
-        menu?.dispatchEvent(
-          new CustomEvent("wa-select", {
-            detail: { item: menu.querySelector('[value="command:sidebar-agents"]') },
-            bubbles: true,
-          }),
-        );
+        expect(menu?.querySelector<HTMLInputElement>('input[role="switch"]')?.checked).toBe(true);
+        menu?.querySelector<HTMLInputElement>('input[role="switch"]')?.click();
         await vi.waitFor(() =>
           expect(sidebar.querySelector(".sidebar-agent-card__main")?.textContent).toContain(
             "Harbor",
@@ -63,9 +59,10 @@ describe("AppSidebar agent roster", () => {
         expect(sidebar.querySelector(".sidebar-workspace-header")).toBeNull();
         sidebar.querySelector<HTMLButtonElement>(".sidebar-agent-card__main")?.click();
         await vi.waitFor(() =>
-          expect(sidebar.querySelector('[value="command:sidebar-agents"]')?.textContent).toContain(
-            "Sessions from every agent",
-          ),
+          expect(
+            sidebar.querySelector<HTMLInputElement>('.sidebar-agent-menu input[role="switch"]')
+              ?.checked,
+          ).toBe(false),
         );
       } finally {
         vi.unstubAllGlobals();

@@ -35,8 +35,10 @@ describe.runIf("__vitest_browser__" in globalThis)("sidebar agent menu layout", 
     );
     expect(tiles).toHaveLength(4);
     await expect
-      .poll(() => tiles.map((tile) => tile.getAttribute("aria-checked")))
-      .toEqual(["true", "false", "false", "false"]);
+      .poll(() =>
+        tiles.map((tile) => tile.classList.contains("sidebar-agent-menu__agent-switch--active")),
+      )
+      .toEqual([true, false, false, false]);
     await document.fonts.ready;
     for (const tile of tiles) {
       const avatar = tile.querySelector<HTMLElement>(".sidebar-agent-menu__agent-avatar")!;

@@ -235,8 +235,10 @@ describe("AppSidebar agent chip", () => {
     expect(menu?.querySelector(".sidebar-pair-mobile")).toBeNull();
     expect(menu?.querySelectorAll('[role="separator"]')).toHaveLength(2);
     expect(
-      menu?.querySelector('[role="separator"]')?.previousElementSibling?.getAttribute("value"),
-    ).toBe("command:all-agents");
+      menu
+        ?.querySelector('[role="separator"]')
+        ?.previousElementSibling?.classList.contains("sidebar-agent-menu__agent-grid"),
+    ).toBe(true);
     expect(menu?.querySelector("openclaw-sidebar-build-chip")).toBeNull();
     expect(menu?.querySelector("openclaw-theme-mode-toggle")).toBeNull();
     expect(
@@ -246,24 +248,27 @@ describe("AppSidebar agent chip", () => {
     ).toEqual([
       "agent:main",
       "agent:research",
-      "command:all-agents",
       "command:new-agent",
       "command:capabilities",
       "command:agent-settings",
-      "command:sidebar-agents",
     ]);
 
     const commands = [...(menu?.querySelectorAll('wa-dropdown-item[value^="command:"]') ?? [])];
     expect(commands.map((item) => item.textContent?.trim())).toEqual([
-      "Every agent",
       "New agent",
       "What can Molty do?",
       "Agent settings",
-      "Sessions from every agent",
     ]);
     for (const command of commands) {
       expect(command.querySelector('[slot="icon"] svg')).not.toBeNull();
     }
+
+    expect(menu?.querySelector("[aria-checked], .session-menu__check")).toBeNull();
+    const rosterSwitch = menu?.querySelector<HTMLInputElement>(
+      '.filter-switch input[role="switch"]',
+    );
+    expect(rosterSwitch?.checked).toBe(false);
+    expect(rosterSwitch?.closest("label")?.textContent?.trim()).toBe("Show all agents in sidebar");
 
     const agentRows = [...(menu?.querySelectorAll(".sidebar-agent-menu__agent-switch") ?? [])];
     expect(agentRows).toHaveLength(2);
@@ -383,34 +388,47 @@ describe("AppSidebar agent chip", () => {
     }
   });
 
-  it("requests composer focus and highlighting from the capabilities action", async () => {
-    const gateway = createGateway({} as GatewayBrowserClient);
-    const { sidebar } = await mountSidebar(
-      gateway,
-      createSessions("main", ["agent:main:main"]),
-      "panel",
-      TWO_AGENTS,
-    );
-    const onNavigate = vi.fn();
-    sidebar.connected = true;
-    sidebar.onNavigate = onNavigate;
-    await sidebar.updateComplete;
+  it.each(["chip", "roster"] as const)(
+    "requests composer focus from the active agent's capabilities in %s mode",
+    async (mode) => {
+      const gateway = createGateway({} as GatewayBrowserClient);
+      const { sidebar, context } = await mountSidebar(
+        gateway,
+        createSessions("main", ["agent:main:main"]),
+        "panel",
+        TWO_AGENTS,
+      );
+      const onNavigate = vi.fn();
+      sidebar.connected = true;
+      sidebar.onNavigate = onNavigate;
+      sidebar.activeRouteId = "skills";
+      context.agentSelection.set("research");
+      context.agentSelection.setScope(null);
+      sidebar.sidebarAgentsMode = mode;
+      await sidebar.updateComplete;
 
-    sidebar.querySelector<HTMLButtonElement>(".sidebar-agent-card__main")?.click();
-    await sidebar.updateComplete;
-    const item = sidebar.querySelector<HTMLElement>(
-      'wa-dropdown-item[value="command:capabilities"]',
-    );
-    sidebar
-      .querySelector(".sidebar-agent-menu")
-      ?.dispatchEvent(new CustomEvent("wa-select", { detail: { item }, bubbles: true }));
+      sidebar
+        .querySelector<HTMLButtonElement>(
+          ".sidebar-agent-card__main, .sidebar-workspace-header__main",
+        )
+        ?.click();
+      await sidebar.updateComplete;
+      const item = sidebar.querySelector<HTMLElement>(
+        'wa-dropdown-item[value="command:capabilities"]',
+      );
+      expect(item?.textContent).toContain("What can research do?");
+      sidebar
+        .querySelector(".sidebar-agent-menu")
+        ?.dispatchEvent(new CustomEvent("wa-select", { detail: { item }, bubbles: true }));
 
-    expect(onNavigate).toHaveBeenCalledOnce();
-    const options = onNavigate.mock.calls[0]?.[1] as { search: string };
-    const search = new URLSearchParams(options.search);
-    expect(search.get("draft")).toBe("What can you do?");
-    expect(search.get(SESSION_COMPOSER_FOCUS_PARAM)).toBe("1");
-  });
+      expect(onNavigate).toHaveBeenCalledOnce();
+      const options = onNavigate.mock.calls[0]?.[1] as { pathname: string; search: string };
+      expect(options.pathname).toBe("/chat/research");
+      const search = new URLSearchParams(options.search);
+      expect(search.get("draft")).toBe("What can you do?");
+      expect(search.get(SESSION_COMPOSER_FOCUS_PARAM)).toBe("1");
+    },
+  );
 
   it("drops the menu below the agent card instead of covering it", async () => {
     const gateway = createGateway({} as GatewayBrowserClient);

@@ -1,13 +1,10 @@
 import { html, nothing } from "lit";
-import { ref } from "lit/directives/ref.js";
 import type { AgentIdentityResult } from "../api/types.ts";
 import { t } from "../i18n/index.ts";
 import { normalizeAgentLabel } from "../lib/agents/display.ts";
 import { resolveAgentAvatarUrl } from "../lib/avatar.ts";
 import { normalizeAgentId } from "../lib/sessions/session-key.ts";
 import { renderAgentSelectAvatar, renderAgentSelectCopy } from "./agent-select.ts";
-import { icons } from "./icons.ts";
-import { syncDropdownItemRadio } from "./web-awesome.ts";
 
 export const AGENT_VALUE_PREFIX = "agent:";
 
@@ -18,13 +15,12 @@ type AgentMenuAgent = {
 };
 
 export type SidebarAgentMenuSwitcherParams = {
-  scopeId: string | null;
+  activeId: string;
   agents: readonly AgentMenuAgent[];
   identities: ReadonlyMap<string, AgentIdentityResult>;
   pinnedAgentIds: readonly string[];
   resolveAvatarUrl: (url: string) => string | null;
   avatarErrorHandler: (url: string) => () => void;
-  rosterMode: boolean;
   agentUnreadCount: (agentId: string) => number;
 };
 
@@ -50,7 +46,7 @@ function renderAgentRow(agent: AgentMenuAgent, params: SidebarAgentMenuSwitcherP
   const agentId = normalizeAgentId(agent.id);
   const identity = params.identities.get(agentId) ?? null;
   const label = normalizeAgentLabel(agent, identity);
-  const active = !params.rosterMode && agentId === params.scopeId;
+  const active = agentId === params.activeId;
   const unread = active ? 0 : params.agentUnreadCount(agentId);
   const option = { value: agentId, label, agent };
   const avatarUrl = resolveAgentAvatarUrl(agent, identity);
@@ -61,10 +57,6 @@ function renderAgentRow(agent: AgentMenuAgent, params: SidebarAgentMenuSwitcherP
         active ? "sidebar-agent-menu__agent-switch--active" : ""
       }"
       value=${`${AGENT_VALUE_PREFIX}${encodeURIComponent(agentId)}`}
-      type="checkbox"
-      role="menuitemradio"
-      aria-checked=${String(active)}
-      ${ref((element) => syncDropdownItemRadio(element, active))}
     >
       <span class="sidebar-agent-menu__agent-tile">
         <span class="sidebar-agent-menu__agent-avatar">
@@ -77,7 +69,6 @@ function renderAgentRow(agent: AgentMenuAgent, params: SidebarAgentMenuSwitcherP
         </span>
         ${renderAgentSelectCopy(option)}
         <span class="sidebar-agent-menu__agent-status">
-          ${active ? html`<span class="session-menu__check" aria-hidden="true">${icons.check}</span>` : nothing}
           ${
             unread > 0
               ? html`<span

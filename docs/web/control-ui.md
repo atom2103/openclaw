@@ -101,8 +101,7 @@ Local onboarding generates a Gateway secret in token mode by default, without a 
 
 ## Agents home
 
-Open **Agents** in the sidebar, choose **Every agent** in the agent switcher, or
-visit `/agents` to see your configured agents as a roster. Each card shows the
+Open **Agents** in the sidebar or visit `/agents` to see your configured agents as a roster. Each card shows the
 agent's identity, model, current work status, last activity, and a preview from its
 main chat. **Open chat** opens that agent's
 main session. Working agents appear first, followed by the most recently active.
@@ -111,12 +110,14 @@ main session. Working agents appear first, followed by the most recently active.
 agent creation flow when available, or agent settings otherwise. `/agents` now
 opens the roster; agent configuration remains at `/settings/agents`.
 
-To browse sessions across agents, choose **Sessions from every agent** in the
-agent switcher. This enables **team mode**, a browser preference that is off by
+To browse sessions across agents, turn on **Show all agents in sidebar** at the
+bottom of the identity menu. This enables **team mode**, a browser preference that is off by
 default. The top row becomes a workspace header with the configured Gateway display
 name, or **OpenClaw**, and a static OpenClaw mark sized like the agent avatar.
-Its menu keeps the agent switcher, followed by **Every agent**, **New agent**,
-and **Agent settings**. **Every agent** opens the Agents home. Documentation, help,
+Both modes use the same menu: the agent switcher, **New agent**,
+**What can this agent do?**, **Agent settings**, and the **Show all agents in sidebar**
+switch as the last row. The active agent has a ring in the switcher. Open the
+Agents home from **Agents** in the main navigation. Documentation, help,
 community, and changelog links remain under **Help** in the account menu at the
 bottom of the sidebar. Sessions appear under agent headers in configured roster order,
 which stays stable as activity changes. **Home** disappears from Pages: click an agent header's avatar or name to
@@ -128,8 +129,8 @@ the same order as the groups; choosing an agent opens New session for that agent
 Each group's **+** does this directly, appearing on hover or keyboard focus and remaining visible on touch devices. Selecting a session switches the active
 agent for chat. Choose an agent in the workspace menu to leave team mode with
 that agent selected, restoring the agent chip, Home row, and direct New session
-button. **Sessions from every agent** is checked while team mode is on; turning
-it off restores the previous page scope.
+button. The **Show all agents in sidebar** switch shows whether team mode is on;
+turning it off restores the previous page scope.
 
 Enabling team mode also defaults the shared page scope to **All agents**, while
 remembering the previous scope to restore when you turn it off. That scope,

@@ -150,12 +150,9 @@ export async function toggleRoster(sidebar: HTMLElement) {
   }
   trigger.click();
   await vi.waitFor(() => {
-    expect(sidebar.querySelector('[value="command:sidebar-agents"]')).not.toBeNull();
+    expect(sidebar.querySelector('.sidebar-agent-menu input[role="switch"]')).not.toBeNull();
   });
-  const item = sidebar.querySelector('[value="command:sidebar-agents"]');
-  sidebar
-    .querySelector(".sidebar-agent-menu")
-    ?.dispatchEvent(new CustomEvent("wa-select", { detail: { item }, bubbles: true }));
+  sidebar.querySelector<HTMLInputElement>('.sidebar-agent-menu input[role="switch"]')?.click();
 }
 
 export async function selectFilter(sidebar: SidebarLifecycleState, value: string) {

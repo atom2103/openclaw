@@ -144,9 +144,9 @@ export function buildCodexPluginThreadConfigTimeoutFallback(params: {
 
 /** Builds the Codex apps config patch and policy context for a native thread. */
 export async function buildCodexPluginThreadConfig(
-  params: BuildCodexPluginThreadConfigParams,
+  input: BuildCodexPluginThreadConfigParams,
 ): Promise<CodexPluginThreadConfig> {
-  params = withCodexMetadataRecovery(params);
+  const params = withCodexMetadataRecovery(input);
   const appCache = params.appCache ?? defaultCodexAppInventoryCache;
   const threadAppCacheKey = resolveCodexPluginThreadAppCacheKey(params);
   const threadRequest: CodexPluginRuntimeRequest = (method, requestParams) =>

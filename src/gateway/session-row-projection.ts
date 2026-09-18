@@ -39,6 +39,7 @@ import { withPreparedSessionRows, type SessionRowReadView } from "./session-row-
 import { createSessionRowProjectionBackfill } from "./session-row-projection-backfill.js";
 import { createSessionRowProjectionContext } from "./session-row-projection-context.js";
 import {
+  createSessionRowMaterializationBatch,
   readResidentSessionRow,
   readSessionRowEntry,
 } from "./session-row-projection-materialize.js";
@@ -382,7 +383,11 @@ export async function createSessionRowProjection(params: {
       /* Dirty keys retain failed background work for the next reader. */
     });
   }
-  function materialize(row: records.Row, configuredAgentIds = new Set(listAgentIds(cfg))) {
+  function materialize(
+    row: records.Row,
+    configuredAgentIds = new Set(listAgentIds(cfg)),
+    readRow = readResidentSessionRow,
+  ) {
     if (!row.entry) {
       return false;
     }
@@ -395,7 +400,7 @@ export async function createSessionRowProjection(params: {
         ? [{ key: value.key, entry: value.entry }]
         : [];
     });
-    const prepared = readResidentSessionRow({
+    const prepared = readRow({
       row: { ...row, entry: row.entry },
       cfg,
       modelCatalog,
@@ -427,6 +432,7 @@ export async function createSessionRowProjection(params: {
     const started = performance.now();
     metadata.prepare(epoch);
     const configuredAgentIds = new Set(listAgentIds(cfg));
+    const readRow = createSessionRowMaterializationBatch();
     for (const [offset, id] of ids.entries()) {
       if (offset > 0 && performance.now() - started >= 12) {
         break;
@@ -434,8 +440,16 @@ export async function createSessionRowProjection(params: {
       const current = rows.get(id),
         revision = epoch;
       const row = current && acquireEntry(current, readSessionRowEntry(current));
-      if (row && materialize(row, configuredAgentIds) && epoch === revision && !catalogDirty) {
+      if (
+        row &&
+        materialize(row, configuredAgentIds, readRow) &&
+        epoch === revision &&
+        !catalogDirty
+      ) {
         dirty.delete(id);
+      }
+      if (epoch !== revision) {
+        break;
       }
     }
   }

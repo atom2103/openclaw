@@ -28,6 +28,7 @@ export function readSessionRowFacts(params: {
   target: Pick<GatewayStoredSessionTarget, "agentId" | "storeTarget"> & { key: string };
   entry: SessionEntry;
   context?: PlacementReadContext;
+  activitySummaryEnabled?: boolean;
 }) {
   const { cfg, target, entry } = params;
   const context = params.context ?? {};
@@ -52,7 +53,12 @@ export function readSessionRowFacts(params: {
         ? "restart"
         : "stop-first"
       : undefined;
-  const activitySummary = projectSessionActivitySummary({ ...target, cfg, entry });
+  const activitySummary = projectSessionActivitySummary({
+    ...target,
+    cfg,
+    entry,
+    enabled: params.activitySummaryEnabled,
+  });
   const board = withOpenClawAgentDatabaseReadOnly(
     (database) => readBoardSessionKeys(database, target.key).length > 0,
     { agentId: target.storeTarget.agentId, path: target.storeTarget.storePath },

@@ -203,10 +203,14 @@ export function createCodexPluginThreadConfigStartupProvider(params: {
           configCwd: params.configCwd,
         })
       : undefined,
-    build: async (buildOptions?: { threadId?: string }) => {
+    build: async (buildOptions?: {
+      threadId?: string;
+      previousPolicyContext?: CodexPluginThreadConfig["policyContext"];
+    }) => {
       const config = await buildCodexPluginThreadConfigWithinDeadline({
         ...buildParams,
         threadId: buildOptions?.threadId,
+        previousPolicyContext: buildOptions?.previousPolicyContext,
         appCache: appCache ?? defaultCodexAppInventoryCache,
         metadataCache,
         failClosedOnTimeout: Boolean(params.scheduledRuntimeAuthority),

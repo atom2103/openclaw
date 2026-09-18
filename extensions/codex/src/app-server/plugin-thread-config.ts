@@ -26,6 +26,10 @@ import {
 } from "./plugin-inventory.js";
 import type { CodexPluginMetadataCache } from "./plugin-metadata-cache.js";
 import {
+  nativeMetadataFallbackContext,
+  withCodexMetadataRecovery,
+} from "./plugin-metadata-recovery.js";
+import {
   readCodexNativeAppToolKeys,
   withCodexNativeAppToolKeys,
 } from "./plugin-native-tool-keys.js";
@@ -53,6 +57,7 @@ export type PluginAppPolicyContextEntry = {
   marketplaceName: ResolvedCodexPluginPolicy["marketplaceName"];
   pluginName: string;
   allowDestructiveActions: boolean;
+  nativeToolMetadataFallback?: true;
   allowOpenWorld?: boolean;
   destructiveApprovalMode?: CodexPluginDestructiveApprovalMode;
   mcpServerNames: string[];
@@ -63,6 +68,7 @@ type AccountAppPolicyContextEntry = {
   source: "account";
   appName: string;
   allowDestructiveActions: boolean;
+  nativeToolMetadataFallback?: true;
   allowOpenWorld?: boolean;
   destructiveApprovalMode?: CodexPluginDestructiveApprovalMode;
   mcpServerNames: string[];
@@ -111,6 +117,7 @@ type BuildCodexPluginThreadConfigParams = {
   request: CodexPluginRuntimeRequest;
   configCwd?: string;
   threadId?: string;
+  previousPolicyContext?: PluginAppPolicyContext;
   appCache?: CodexAppInventoryCache;
   appCacheKey: string;
   metadataCache?: CodexPluginMetadataCache;
@@ -119,7 +126,7 @@ type BuildCodexPluginThreadConfigParams = {
 
 // Admission changes must rebuild existing bindings too, or older bindings can
 // bypass updated app approval checks after the gateway has been upgraded.
-const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 11;
+const CODEX_PLUGIN_THREAD_CONFIG_INPUT_FINGERPRINT_VERSION = 12;
 const CODEX_PLUGIN_THREAD_CONFIG_FINGERPRINT_VERSION = 2;
 
 /** Returns true when plugin config exists and thread config may need app patches. */
@@ -162,6 +169,7 @@ export function buildCodexPluginThreadConfigTimeoutFallback(params: {
 export async function buildCodexPluginThreadConfig(
   params: BuildCodexPluginThreadConfigParams,
 ): Promise<CodexPluginThreadConfig> {
+  params = withCodexMetadataRecovery(params);
   const appCache = params.appCache ?? defaultCodexAppInventoryCache;
   const threadAppCacheKey = resolveCodexPluginThreadAppCacheKey(params);
   const threadRequest: CodexPluginRuntimeRequest = (method, requestParams) =>
@@ -411,6 +419,9 @@ export async function buildCodexPluginThreadConfig(
           : undefined,
       );
       policyApps[app.id] = {
+        ...(!record.policy.allowDestructiveActions
+          ? nativeMetadataFallbackContext(record.policy, await getNativeToolKeys(), app.id)
+          : {}),
         configKey: record.policy.configKey,
         marketplaceName: record.policy.marketplaceName,
         pluginName: record.policy.pluginName,
@@ -448,6 +459,9 @@ export async function buildCodexPluginThreadConfig(
         : undefined,
     );
     policyApps[app.id] = {
+      ...(!accountPolicy.allowDestructiveActions
+        ? nativeMetadataFallbackContext(accountPolicy, await getNativeToolKeys(), app.id)
+        : {}),
       source: "account",
       appName: app.name,
       allowDestructiveActions: accountPolicy.allowDestructiveActions,
@@ -645,6 +659,9 @@ export async function refreshCodexPluginAppApprovalPolicy(params: {
         message: `Could not verify current Codex app approval policy for ${id}; the app was not exposed.`,
       });
     } else {
+      apps[id] = { ...policy };
+      delete apps[id].nativeToolMetadataFallback;
+      Object.assign(apps[id], nativeMetadataFallbackContext(policy, nativeToolKeys, id));
       configPatch.apps[id] = buildEnabledAppConfig(
         policy,
         buildCodexAppApprovalOverrides(

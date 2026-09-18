@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { afterEach, expect, test, vi } from "vitest";
+import { loadPublishedPreparedModelCatalogOwnerSnapshot } from "../../agents/prepared-model-catalog.js";
 import {
   markPreparedModelRuntimeSnapshotsStale,
   rejectPendingPreparedModelRuntimeReplacement,
@@ -82,8 +83,16 @@ test("catalog reload releases the agent writer while preserving same-session ord
     });
     expect(replacement).toBeDefined();
     const loadGatewayModelCatalog = vi.fn(async () => {
-      entered.resolve();
-      return await loadActualGatewayModelCatalog({ agentId: "main", getConfig: () => ({}) });
+      return await loadActualGatewayModelCatalog({
+        agentId: "main",
+        getConfig: () => ({}),
+        loadPublishedPreparedModelCatalogOwnerSnapshot: (params) => {
+          const pending = loadPublishedPreparedModelCatalogOwnerSnapshot(params);
+          // Signal after the real owner has entered its replacement wait.
+          entered.resolve();
+          return pending;
+        },
+      });
     });
     const context = patchContext(loadGatewayModelCatalog);
     const catalogResponse = vi.fn();

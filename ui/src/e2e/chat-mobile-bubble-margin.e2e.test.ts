@@ -112,7 +112,9 @@ suite.define(() => {
               ).toBeGreaterThanOrEqual(-1);
             }
             const toggle = page.locator(".chat-message-disclosure__toggle");
-            if (await toggle.count()) {
+            if (testCase.id === "forwarded-short") {
+              await expectBrowser(toggle).toBeHidden();
+            } else if (await toggle.count()) {
               await toggle.first().click();
               const expanded = await measureMargin(page, testCase);
               expect(expanded.open, `${testCase.id} expanded`).toBeGreaterThanOrEqual(

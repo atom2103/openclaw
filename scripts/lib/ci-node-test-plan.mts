@@ -146,6 +146,10 @@ const policyTestWatches = [
     watchGlobs: ["src/test-utils/**/*.ts"],
   },
   {
+    testFile: "test/scripts/test-projects.test.ts",
+    watchGlobs: ["test/scripts/**/*.test.ts"],
+  },
+  {
     testFile: "test/scripts/pr-worktree-provision.test.ts",
     ownerGlobs: ["scripts/pr-lib/wrapper-components.txt"],
     watchGlobs: [

@@ -254,11 +254,20 @@ suite.define(() => {
           agentId: "research",
           reason: "create",
         });
+        const readsBeforeReturn = (await gateway.getRequests("sessions.list", researchMatch))
+          .length;
         await sidebar.getByRole("button", { name: /Switch agent/ }).click();
         await sidebar
           .locator("wa-dropdown.sidebar-agent-menu")
           .getByRole("menuitemradio", { name: "Research", exact: true })
           .click();
+        const returnedList = await gateway.waitForRequest("sessions.list", {
+          match: researchMatch,
+          after: readsBeforeReturn,
+        });
+        expect(returnedList.params).toMatchObject({
+          limit: filter === "All" ? pageSize : retainedLimit,
+        });
         await rowFor(newRow.key).waitFor({ state: "visible" });
         await expect.poll(() => rowFor(olderRow.key).count()).toBe(0);
         await sidebar.getByRole("button", { name: "Load more sessions", exact: true }).click();

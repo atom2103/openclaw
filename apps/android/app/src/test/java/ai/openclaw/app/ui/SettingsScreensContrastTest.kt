@@ -158,6 +158,7 @@ class SettingsScreensContrastTest {
       }
       val expected = model.instanceId.value
       assertTrue(expected.isNotBlank())
+      composeRule.onNodeWithText(nativeString("Diagnostics")).performScrollTo().performClick()
       val value = composeRule.onNodeWithText(expected, useUnmergedTree = true).performScrollTo()
       value.assertIsDisplayed()
       composeRule.runOnIdle { clipboard.setPrimaryClip(ClipData.newPlainText("Previous clipboard", "synthetic clipboard sentinel")) }
@@ -196,6 +197,9 @@ class SettingsScreensContrastTest {
       }
       val failures = mutableListOf<String>()
       for (text in listOf(nativeString("Connection"), nativeString("Instance ID"), model.instanceId.value)) {
+        if (text == nativeString("Instance ID")) {
+          composeRule.onNodeWithText(nativeString("Diagnostics")).performScrollTo().performClick()
+        }
         // Exact semantic lookup alone must not certify the visible, possibly ellipsized value.
         val node = composeRule.onNodeWithText(text, useUnmergedTree = true).performScrollTo()
         captureTypography("gateway-metric-${if (text == model.instanceId.value) "instance-value" else text}")
@@ -286,6 +290,9 @@ class SettingsScreensContrastTest {
         )
       }
       for (key in listOf("Scan or paste a setup code to add another gateway.", "Unencrypted", "Secure (TLS)")) {
+        if (key == "Unencrypted") {
+          composeRule.onNodeWithText(nativeString("Manual Gateway")).performScrollTo().performClick()
+        }
         val label = nativeString(key)
         composeRule.onNodeWithText(label, useUnmergedTree = true).performScrollTo()
         captureTypography("gateway-$key")

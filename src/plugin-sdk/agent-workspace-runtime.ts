@@ -11,3 +11,4 @@ export {
 export { createWorkspaceAttachmentPreparer } from "../agents/workspace-attachment-preparer.js";
 export { createWorkspaceBootstrapFilePolicy } from "../agents/workspace-bootstrap-policy.js";
 export { createWorkspaceMemoryFileClient } from "../agents/workspace-memory-client.js";
+export { resolveWorkspaceWorkerArgv } from "../agents/workspace-worker.js";

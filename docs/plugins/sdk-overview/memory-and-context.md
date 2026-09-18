@@ -91,6 +91,12 @@ Memory index + sessions         Memory files
   can invoke it; the worker needs neither an index directory nor embedding credentials.
 - The workspace provider owns transport, admitted roots and cancellation. Registering
   this interface does not automatically provision a remote host or wire a paired node.
+- The File Transfer workspace adapter connects this client over the paired node's
+  `workspace.memory` duplex command. Enable that command explicitly on both sides;
+  existing file grants must admit the requested Memory paths. It reuses the same
+  file worker and watcher, with the index remaining on Gateway. This adapter
+  currently requires canonical paths within the configured workspace; it does not
+  grant access to external `extraPaths` or broaden owner document editing.
 - `createWorkspaceMemoryFileClient` from `agent-workspace-runtime` adapts that worker
   to `memoryFiles`. Supply the Gateway and remote workspace paths, a lifetime signal,
   a request function (JSON stdin to stdout), and a subscription function (JSON lines).
@@ -104,3 +110,16 @@ Memory index + sessions         Memory files
   paths, multimodal settings and debounce time cross this interface, not embedding
   provider configuration. Providers need a subscription transport for this mode;
   lost subscriptions must report unavailability so the manager refreshes on search.
+
+### Skills on a paired workspace node
+
+The File Transfer workspace adapter uses `workspace.skills` for native discovery,
+instruction/resource reads, change notifications and dependency installation.
+Gateway retains the existing installation policy check. Both sides must explicitly
+enable the command; file grants must cover source roots and the workspace Skills
+directory. A read grant alone does not authorize an installation command.
+
+Workspace paths are mapped to `remoteRoot`. Other configured source directories
+must exist at the same paths on the node. Provision bundled/plugin Skills there
+and include the native dependency bin directory in the Harness PATH. This adapter
+does not yet implement Skill source publication or ClawHub update/removal.

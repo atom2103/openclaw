@@ -112,6 +112,9 @@ request Gateway-local reads by returning a source label or `fileHost` value.
 Stopping the binding revokes retained host readers.
 
 OpenClaw packages `dist/worker/skills-worker-entry.js` for workspace adapters.
+Use `resolveWorkspaceWorkerArgv("memory" | "skills")` from
+`agent-workspace-runtime` to resolve worker arguments for source and installed
+OpenClaw builds, then append the worker's documented arguments.
 It runs the existing Skills discovery, resource, watch, install and ClawHub
 operations in a dedicated process. It does not depend on Codex. Launch it with
 the workspace path, home path and operation; map admitted Skill source paths

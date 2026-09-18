@@ -286,11 +286,14 @@ operations and native cleanup. Cold registry restoration and runtime-configurati
 preparation still retain their existing main-thread behavior.
 
 Dynamic model resolution awaits persisted auth-profile reads. Agent-local and
-legacy shared credentials use an existing-only reader through the shared SQLite
-broker; relocated shared credentials and selected personal accounts use the
-canonical shared-state worker. Missing stores remain missing. Reader cleanup
-settles before the result reaches host-owned overlays, migration checks, and
-model preparation. A recorded refusal on an unreadable inherited agent store
+legacy shared credentials use the isolated read-only child, so reads can coexist
+with the agent database's memory publication worker. Captured source-exclusion
+scopes read through their owned private snapshot. Relocated shared credentials
+and selected personal accounts use the canonical shared-state worker. Missing
+stores remain missing. Bounded transfer frames preserve complete credential
+rows without an aggregate size limit. Reader cleanup settles before the result
+reaches model preparation; host-owned overlays and migration checks retain
+captured persisted facts and revalidate after cleanup. A recorded refusal on an unreadable inherited agent store
 does not hide healthy local credentials; selected-store failures still propagate.
 Credential mutations and synchronous SDK readers retain their existing owners.
 

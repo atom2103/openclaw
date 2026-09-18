@@ -156,10 +156,6 @@ export type AuthProfileRowRead = {
   state: PersistedAuthProfileStoreInspection;
 };
 
-export type AuthProfileReadWorkerOperations = {
-  read: { input: undefined; output: AuthProfileRowRead };
-};
-
 /** Persisted credential payload without runtime-only selection state. */
 export type AuthProfileSecretsStore = {
   version: number;

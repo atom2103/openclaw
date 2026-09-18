@@ -16,7 +16,6 @@ import {
   getNodeSqliteKysely,
 } from "../../infra/kysely-sync.js";
 import { resolveSqliteDatabaseFilePaths } from "../../infra/sqlite-files.js";
-import type { SqliteWorkerBackend } from "../../infra/sqlite-worker-contract.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import {
   assertExistingAgentSchemaOwner,
@@ -50,10 +49,7 @@ import {
   closeAuthProfileReadPool,
   isMissingDatabasePath,
 } from "./sqlite-read-pool.js";
-import type {
-  AuthProfileReadWorkerOperations,
-  PersistedAuthProfileStoreInspection,
-} from "./types.js";
+import type { AuthProfileRowRead, PersistedAuthProfileStoreInspection } from "./types.js";
 
 export { closeAuthProfileReadPool };
 
@@ -362,23 +358,17 @@ export function inspectAuthProfileJsonCellReadOnly(
   }
 }
 
-/** Bind the agent auth reader and its scoped cleanup to the worker command contract. */
-export function openAuthProfileReadWorkerBackend(
-  _input: undefined,
-  context: { databasePath: string },
-): SqliteWorkerBackend<AuthProfileReadWorkerOperations> {
-  const target = { kind: "agent" as const, path: context.databasePath };
-  return {
-    execute() {
-      return {
-        store: inspectAuthProfileJsonCellReadOnly(target, "store"),
-        state: inspectAuthProfileJsonCellReadOnly(target, "state"),
-      };
-    },
-    close() {
-      closeAuthProfileReadPool({ kind: "database", databasePath: context.databasePath });
-    },
-  };
+/** The isolated reader closes its native pool before transferring credential rows. */
+export function readAuthProfileRowsReadOnly(databasePath: string): AuthProfileRowRead {
+  const target = { kind: "agent" as const, path: databasePath };
+  try {
+    return {
+      store: inspectAuthProfileJsonCellReadOnly(target, "store"),
+      state: inspectAuthProfileJsonCellReadOnly(target, "state"),
+    };
+  } finally {
+    closeAuthProfileReadPool({ kind: "database", databasePath });
+  }
 }
 
 /** Distinguishes an absent auth row from a present store that could not be read. */

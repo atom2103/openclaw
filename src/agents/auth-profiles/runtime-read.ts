@@ -1,9 +1,11 @@
 /** Runtime auth reads compose worker-prepared facts through the store's captured host scope. */
 import path from "node:path";
+import { toErrorObject } from "@openclaw/normalization-core/error-coercion";
 import type { Result } from "@openclaw/normalization-core/result";
 import { cloneEnvWithPlatformSemantics } from "../../config/config-env-vars.js";
 import { resolveStateDir } from "../../config/paths.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { withSqliteWorkerCleanupFailure } from "../../infra/sqlite-worker-broker-reply.js";
 import { captureOpenClawStateWorkerContext } from "../../state/openclaw-state-worker-context.js";
 import { isUserModelAuthProfileId } from "../../state/user-model-account-id.js";
 import { readUserModelAuthProfileAsync } from "../../state/user-model-accounts.js";
@@ -41,6 +43,7 @@ import {
 } from "./sqlite-read.js";
 import {
   resolveAuthProfileDatabasePath as resolveAgentAuthPath,
+  resolveAuthProfileDatabaseOwnerId,
   type AuthProfileDatabase,
 } from "./sqlite.js";
 import type { AuthProfileStore, AuthProfileRowRead } from "./types.js";
@@ -293,7 +296,14 @@ export function createAuthProfileStoreRuntimeReader({
             ? [resolveAgentAuthPath(inheritedAuthDir)]
             : []),
         ]),
-      ].map((databasePath) => [databasePath, prepareAgentAuthProfileRowsRead(databasePath)]),
+      ].map((databasePath) => [
+        databasePath,
+        prepareAgentAuthProfileRowsRead({
+          databasePath,
+          agentId: resolveAuthProfileDatabaseOwnerId(path.dirname(databasePath)),
+          env,
+        }),
+      ]),
     );
     const inCapturedScope = <T>(run: () => T): T => scope.run(effectiveAgentDir, env, run);
     const stores = new Map<string, Result<AuthProfileStore, unknown>>();
@@ -301,7 +311,7 @@ export function createAuthProfileStoreRuntimeReader({
     const readOwner = async (
       ownerAgentDir: string | undefined,
       databasePath: string,
-      reader: ReturnType<typeof prepareAgentAuthProfileRowsRead>,
+      reader: Pick<ReturnType<typeof prepareAgentAuthProfileRowsRead>, "read" | "assertCurrent">,
     ) => {
       assertAuthProfileMigrationStateAtDatabasePath(
         databasePath,
@@ -324,88 +334,127 @@ export function createAuthProfileStoreRuntimeReader({
         readStore: () => loadPersistedAuthProfileStoreFromRows(rows, databasePath),
       });
     };
-    const selectedAgentPath = effectiveAgentDir
-      ? resolveAgentAuthPath(effectiveAgentDir)
-      : undefined;
-    if (selectedAgentPath) {
-      await readOwner(effectiveAgentDir, selectedAgentPath, agentReads.get(selectedAgentPath)!);
-    }
-    if (needsSharedStore && sharedPreparationFailure) {
-      throw sharedPreparationFailure.error;
-    }
-    const sharedOwnership = needsSharedStore
-      ? await resolveSharedAuthStoreOwnershipAsync(sharedContext!)
-      : undefined;
-    const sharedPath = sharedOwnership ? resolveSharedAuthPath(env) : undefined;
-    const requestedPath = selectedAgentPath ?? sharedPath!;
-    const inheritedPath = inheritedAuthDir ? resolveAgentAuthPath(inheritedAuthDir) : sharedPath!;
-    const paths = [...new Set([requestedPath, ...(effectiveAgentDir ? [inheritedPath] : [])])];
-    for (const databasePath of paths) {
-      if (stores.has(databasePath)) {
-        continue;
+    const loadPrepared = async () => {
+      const selectedAgentPath = effectiveAgentDir
+        ? resolveAgentAuthPath(effectiveAgentDir)
+        : undefined;
+      if (selectedAgentPath) {
+        await readOwner(effectiveAgentDir, selectedAgentPath, agentReads.get(selectedAgentPath)!);
       }
-      try {
-        await readOwner(
-          databasePath === requestedPath ? effectiveAgentDir : inheritedAuthDir,
-          databasePath,
-          databasePath === sharedPath && sharedOwnership?.location === "state-db"
-            ? {
-                read: () => readSharedAuthProfileRows(sharedContext!),
-                assertCurrent: () => sharedContext!.admission.assertCurrent(),
-              }
-            : agentReads.get(databasePath)!,
-        );
-      } catch (error) {
-        if (databasePath === requestedPath) {
-          throw error;
-        }
-        // Composition applies the current inherited-owner refusal policy to this read's failure.
-        stores.set(databasePath, { ok: false, error });
+      if (needsSharedStore && sharedPreparationFailure) {
+        throw sharedPreparationFailure.error;
       }
-    }
-    const assertCurrent = () => {
-      sharedContext?.admission.assertCurrent();
+      const sharedOwnership = needsSharedStore
+        ? await resolveSharedAuthStoreOwnershipAsync(sharedContext!)
+        : undefined;
+      const sharedPath = sharedOwnership ? resolveSharedAuthPath(env) : undefined;
+      const requestedPath = selectedAgentPath ?? sharedPath!;
+      const inheritedPath = inheritedAuthDir ? resolveAgentAuthPath(inheritedAuthDir) : sharedPath!;
+      const paths = [...new Set([requestedPath, ...(effectiveAgentDir ? [inheritedPath] : [])])];
       for (const databasePath of paths) {
-        agentReads.get(databasePath)?.assertCurrent();
-        const owner = readOwners.get(databasePath);
-        // A later owner read can yield after these fixed legacy paths were checked.
-        assertAuthProfileMigrationCandidates({
-          databasePath,
-          candidates: owner?.candidates ?? [],
-          hasCredentials: () => Object.keys(owner?.readStore()?.profiles ?? {}).length > 0,
-          provider: capturedOptions.migrationProvider,
-          config: capturedOptions.config,
-          deferScopedRefusals: capturedOptions.deferScopedMigrationRefusals,
-        });
+        if (stores.has(databasePath)) {
+          continue;
+        }
+        try {
+          await readOwner(
+            databasePath === requestedPath ? effectiveAgentDir : inheritedAuthDir,
+            databasePath,
+            databasePath === sharedPath && sharedOwnership?.location === "state-db"
+              ? {
+                  read: () => readSharedAuthProfileRows(sharedContext!),
+                  assertCurrent: () => sharedContext!.admission.assertCurrent(),
+                }
+              : agentReads.get(databasePath)!,
+          );
+        } catch (error) {
+          if (databasePath === requestedPath) {
+            throw error;
+          }
+          // Composition applies the current inherited-owner refusal policy to this read's failure.
+          stores.set(databasePath, { ok: false, error });
+        }
       }
-    };
-    assertCurrent();
-    const load = () =>
-      loadRuntimeAuthProfileStore(
-        effectiveAgentDir,
-        { ...capturedOptions, profileId: undefined },
-        env,
-        (databasePath) => {
-          const prepared = stores.get(databasePath);
-          if (!prepared) {
-            throw new Error("Auth profile read changed its prepared database owner");
-          }
-          if (!prepared.ok) {
-            throw prepared.error;
-          }
-          return prepared.value;
-        },
+      const assertCurrent = () => {
+        sharedContext?.admission.assertCurrent();
+        for (const databasePath of paths) {
+          agentReads.get(databasePath)?.assertCurrent();
+          const owner = readOwners.get(databasePath);
+          // A later owner read can yield after these fixed legacy paths were checked.
+          assertAuthProfileMigrationCandidates({
+            databasePath,
+            candidates: owner?.candidates ?? [],
+            hasCredentials: () => Object.keys(owner?.readStore()?.profiles ?? {}).length > 0,
+            provider: capturedOptions.migrationProvider,
+            config: capturedOptions.config,
+            deferScopedRefusals: capturedOptions.deferScopedMigrationRefusals,
+          });
+        }
+      };
+      assertCurrent();
+      const load = () =>
+        loadRuntimeAuthProfileStore(
+          effectiveAgentDir,
+          { ...capturedOptions, profileId: undefined },
+          env,
+          (databasePath) => {
+            const prepared = stores.get(databasePath);
+            if (!prepared) {
+              throw new Error("Auth profile read changed its prepared database owner");
+            }
+            if (!prepared.ok) {
+              throw prepared.error;
+            }
+            return prepared.value;
+          },
+        );
+      const store = inCapturedScope(load);
+      if (!personalProfileId) {
+        return { store, assertCurrent };
+      }
+      if (sharedPreparationFailure) {
+        throw sharedPreparationFailure.error;
+      }
+      const personalProfile = await readUserModelAuthProfileAsync(
+        personalProfileId,
+        sharedContext!,
       );
-    const store = inCapturedScope(load);
-    if (!personalProfileId) {
-      return store;
+      assertCurrent();
+      return {
+        store: materializePreparedPersonalAuthProfile(store, personalProfileId, personalProfile),
+        assertCurrent,
+      };
+    };
+    let result: Result<{ store: AuthProfileStore; assertCurrent: () => void }, unknown>;
+    try {
+      result = { ok: true, value: await loadPrepared() };
+    } catch (error) {
+      result = { ok: false, error };
     }
-    if (sharedPreparationFailure) {
-      throw sharedPreparationFailure.error;
+    const cleanup = await Promise.allSettled(
+      [...agentReads.values()].map((reader) => reader.dispose()),
+    );
+    const failures = cleanup.flatMap((entry) =>
+      entry.status === "rejected" ? [entry.reason] : [],
+    );
+    if (failures.length > 0) {
+      const error =
+        failures.length === 1
+          ? failures[0]
+          : new AggregateError(failures, "Auth profile reader cleanup failed", {
+              cause: failures[0],
+            });
+      throw result.ok
+        ? error
+        : withSqliteWorkerCleanupFailure(
+            toErrorObject(result.error, "Auth profile runtime read failed"),
+            error,
+          );
     }
-    const personalProfile = await readUserModelAuthProfileAsync(personalProfileId, sharedContext!);
-    assertCurrent();
-    return materializePreparedPersonalAuthProfile(store, personalProfileId, personalProfile);
+    if (!result.ok) {
+      throw result.error;
+    }
+    result.value.assertCurrent();
+    return result.value.store;
   }
 
   return { loadAuthProfileStoreForRuntime, loadAuthProfileStoreForRuntimeAsync };

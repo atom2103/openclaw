@@ -13,7 +13,11 @@ import { AuthProfileStoreUnreadableError } from "./store-unreadable-error.js";
 import { createAuthProfileStoreRuntime } from "./store.js";
 import type { AuthProfileStore, AuthProfileRowRead } from "./types.js";
 
-const reader = vi.hoisted(() => ({ read: vi.fn(), assertCurrent: vi.fn() }));
+const reader = vi.hoisted(() => ({
+  read: vi.fn(),
+  assertCurrent: vi.fn(),
+  dispose: vi.fn(async () => {}),
+}));
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
 beforeEach(() => {
   vi.spyOn(sqliteRead, "prepareAgentAuthProfileRowsRead").mockReturnValue(reader);
